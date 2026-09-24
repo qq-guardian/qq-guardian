@@ -1,0 +1,4 @@
+# pnpm 10 blocks dependency build scripts by default; esbuild is the only
+# dev dependency that needs one (it verifies/installs its platform binary).
+onlyBuiltDependencies:
+  - esbuild

@@ -1,0 +1,33 @@
+.git
+.github
+node_modules
+release
+.env
+.env.*
+deploy/.env
+deploy/.env.*
+!deploy/.env.example
+# Local Compose overrides are operator-owned and can contain endpoint or
+# credential settings. They are never a production-image build input.
+deploy/compose.local.yaml
+deploy/compose.local.yml
+data
+config
+*.db
+*.db-shm
+*.db-wal
+*.log
+dist-snowluma
+dist-snowluma/**
+webui
+src
+docs
+intel
+README.md
+LICENSE
+plugin-icon.png
+pnpm-lock.yaml
+pnpm-workspace.yaml
+package.json
+tsconfig.json
+scripts
