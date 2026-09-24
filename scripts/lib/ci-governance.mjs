@@ -15,7 +15,6 @@ export const REVIEWED_ACTION_PINS = Object.freeze({
   'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
   'github/codeql-action/init': '1c5b675653bb5c22dbe9b12b556ec555138e09fd',
   'actions/dependency-review-action': 'a1d282b36b6f3519aa1f3fc636f609c47dddb294',
-  'gitleaks/gitleaks-action': 'e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e',
   'github/codeql-action/analyze': '1c5b675653bb5c22dbe9b12b556ec555138e09fd',
   'actions/upload-artifact': '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
   'actions/download-artifact': '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
@@ -90,8 +89,8 @@ export function verifyWorkflow(workflow) {
   requireRunCommands(jobs, 'contract-snowluma', ['pnpm run verify:contracts:snowluma'], errors);
   requireRunCommands(jobs, 'contract-napcat', ['pnpm run verify:contracts:napcat'], errors);
   requireRunCommands(jobs, 'integration', ['pnpm run build', 'pnpm run test:integration'], errors);
-  requireText(jobs, 'security', ['security-events: write', 'actions/dependency-review-action@', 'gitleaks/gitleaks-action@', 'github/codeql-action/init@', 'github/codeql-action/analyze@'], errors);
-  requireRunCommands(jobs, 'security', ['pnpm audit --prod --audit-level=high'], errors);
+  requireText(jobs, 'security', ['security-events: write', 'actions/dependency-review-action@', 'github/codeql-action/init@', 'github/codeql-action/analyze@'], errors);
+  requireRunCommands(jobs, 'security', ['pnpm audit --prod --audit-level=high', 'gitleaks detect --source . --no-banner'], errors);
   requireText(jobs, 'production-build', ['actions/upload-artifact@', 'dist-snowluma/', 'release/', 'if-no-files-found: error'], errors);
   requireRunCommands(jobs, 'production-build', ['pnpm run build', 'pnpm run verify:manifests', 'pnpm run package:archives', 'git diff --exit-code -- dist'], errors);
   requireText(jobs, 'artifact-validation', ['needs: production-build', 'actions/download-artifact@'], errors);
