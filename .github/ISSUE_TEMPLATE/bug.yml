@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible Guardian defect or compatibility regression.
+title: "[Bug] "
+body:
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - NapCat
+        - SnowLuma
+        - Both
+        - Provider-independent
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary and impact
+      description: Explain the observed behavior, expected behavior, and operational or security impact.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide deterministic steps and sanitized logs. Never paste access tokens, cookies, passwords, or private keys.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include Guardian version/commit, provider version, transport, Node.js version, and deployment type.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, personal identifiers, and private message content from this report.
+          required: true
