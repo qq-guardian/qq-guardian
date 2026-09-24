@@ -1,0 +1,13 @@
+{
+  "name": "napcat-plugin-qq-guardian",
+  "version": "1.4.2",
+  "description": "QQ 群安全防护插件 — 加群审核、验证码、风控检测、黑名单、审计日志、WebUI 管理面板",
+  "main": "index.mjs",
+  "author": "ShiYuPIay",
+  "license": "AGPL-3.0-or-later",
+  "icon": "plugin-icon.png",
+  "plugin": "QQ Guardian",
+  "napcat": {
+    "minVersion": "4.14.0"
+  }
+}

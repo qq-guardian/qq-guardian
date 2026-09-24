@@ -1,0 +1,18 @@
+{
+  "$comment": "Cloud intel feed for napcat-plugin-qq-guardian. Configured instances may fetch this document, but unpinned data is observation-only. Admission or moderation actions require enforcementMode=enforce and an exact SHA-256 pin for every feed URL. Shape: red_flag_users = network-reported bad-actor QQ IDs, either plain numbers or {id, action: 'reject'|'kick', reason}; risk_keywords = {name, pattern (JS regex), action: mute|kick|notify_admin|log_only}; reject_patterns = JS regexes matched against join-request comments.",
+  "version": 1,
+  "updated_at": "2026-07-26T00:00:00Z",
+  "red_flag_users": [],
+  "risk_keywords": [
+    { "name": "fakeOfficial", "pattern": "(?:官方|客服|系统)(?:通知|提醒|升级).{0,12}(?:点击|添加|扫码|领取)", "action": "mute" },
+    { "name": "freebieScam", "pattern": "(?:免费领|扫码领|点击领取).{0,10}(?:皮肤|点券|红包|会员|礼包)", "action": "mute" },
+    { "name": "investScam", "pattern": "(?:高额回报|稳赚不赔|带你赚钱|内部消息.{0,6}(?:股票|基金|币))", "action": "mute" },
+    { "name": "partTimeScam", "pattern": "(?:手机兼职|在家赚钱|轻松日入|日入[0-9一二三四五百千]{2,})", "action": "mute" },
+    { "name": "accountTrade", "pattern": "(?:收|出|买|卖)(?:实名|成品|白号|老号)(?:号|QQ|微信)?", "action": "mute" }
+  ],
+  "reject_patterns": [
+    "(?:买|卖|出|收)(?:小?号|群)",
+    "(?:进|入)群(?:发|打)广告",
+    "互(?:赞|粉|关)"
+  ]
+}
