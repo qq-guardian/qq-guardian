@@ -1,0 +1,126 @@
+name: ${COMPOSE_PROJECT_NAME:-qq-guardian}
+
+# Guardian is a OneBot consumer sidecar. It never needs a host-published
+# OneBot port: service DNS keeps the connection inside this Compose network.
+# Copy .env.example to .env and pass it with --env-file before first launch.
+services:
+  snowluma:
+    image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:latest}
+    restart: unless-stopped
+    shm_size: ${SNOWLUMA_SHM_SIZE:-1gb}
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      VNC_PASSWD: ${VNC_PASSWD:?Set VNC_PASSWD in .env before starting}
+      SNOWLUMA_UID: ${SNOWLUMA_UID:-1000}
+      SNOWLUMA_GID: ${SNOWLUMA_GID:-1000}
+      SNOWLUMA_WEBUI_HOST: 0.0.0.0
+      SNOWLUMA_WEBUI_PORT: 5099
+      SNOWLUMA_LOG_LEVEL: ${SNOWLUMA_LOG_LEVEL:-info}
+      SNOWLUMA_SCREEN: ${SNOWLUMA_SCREEN:-1920x1080x24}
+      SNOWLUMA_HOOK_AUTOLOAD: ${SNOWLUMA_HOOK_AUTOLOAD:-1}
+      SNOWLUMA_EXTRA_QQ_HOMES: ${SNOWLUMA_EXTRA_QQ_HOMES:-}
+      SNOWLUMA_QQ_FLAGS: ${SNOWLUMA_QQ_FLAGS:---disable-gpu --disable-software-rasterizer --disable-gpu-compositing}
+    # noVNC and SnowLuma's own WebUI are loopback-published for first-time QQ
+    # login and local administration. OneBot stays private to the sidecar.
+    ports:
+      - "127.0.0.1:${NOVNC_HOST_PORT:-6081}:6081"
+      - "127.0.0.1:${SNOWLUMA_WEBUI_HOST_PORT:-5099}:5099"
+    volumes:
+      - snowluma-data:/app/data
+      - qq-client-config:/app/.config
+      - qq-client-data:/app/.local/share
+
+  # Docker creates new named volumes as root-owned. Guardian intentionally
+  # runs as Node's unprivileged user, so initialize ownership before it can
+  # create config, migration artifacts, or SQLite state. This service has no
+  # network and changes ownership only; it never deletes volume contents.
+  guardian-storage-init:
+    image: node:22-bookworm-slim
+    user: "0:0"
+    restart: "no"
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        mkdir -p /guardian/data /guardian/config
+        chown -R 1000:1000 /guardian/data /guardian/config
+    volumes:
+      - guardian-data:/guardian/data
+      - guardian-config:/guardian/config
+
+  guardian:
+    build:
+      # The bundle root has sibling deploy/ and dist-snowluma/ directories.
+      # This also works from a source checkout after `pnpm run build`.
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ${GUARDIAN_IMAGE:-qq-guardian:local}
+    restart: unless-stopped
+    depends_on:
+      snowluma:
+        condition: service_started
+      guardian-storage-init:
+        condition: service_completed_successfully
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # The default is valid only for this sidecar network. For an external
+      # SnowLuma instance, set an explicit reachable ws:// or wss:// URL.
+      SNOWLUMA_WS_URL: ${SNOWLUMA_WS_URL:-ws://snowluma:3001/}
+      SNOWLUMA_ACCESS_TOKEN: ${SNOWLUMA_ACCESS_TOKEN:-}
+      SNOWLUMA_TRANSPORT: ${SNOWLUMA_TRANSPORT:-forward-websocket}
+      SNOWLUMA_HTTP_URL: ${SNOWLUMA_HTTP_URL:-http://snowluma:3000/}
+      SNOWLUMA_WEBHOOK_HOST: ${SNOWLUMA_WEBHOOK_HOST:-0.0.0.0}
+      SNOWLUMA_WEBHOOK_PORT: ${SNOWLUMA_WEBHOOK_PORT:-6100}
+      SNOWLUMA_WEBHOOK_PATH: ${SNOWLUMA_WEBHOOK_PATH:-/onebot/events}
+      SNOWLUMA_REVERSE_WS_HOST: ${SNOWLUMA_REVERSE_WS_HOST:-0.0.0.0}
+      SNOWLUMA_REVERSE_WS_PORT: ${SNOWLUMA_REVERSE_WS_PORT:-6101}
+      SNOWLUMA_REVERSE_WS_PATH: ${SNOWLUMA_REVERSE_WS_PATH:-/onebot}
+      SNOWLUMA_SDK_FALLBACK: ${SNOWLUMA_SDK_FALLBACK:-auto}
+      SNOWLUMA_MAX_FRAME_BYTES: ${SNOWLUMA_MAX_FRAME_BYTES:-1048576}
+      SNOWLUMA_RAW_QUEUE_LIMIT: ${SNOWLUMA_RAW_QUEUE_LIMIT:-64}
+      SNOWLUMA_RAW_QUEUE_BYTES: ${SNOWLUMA_RAW_QUEUE_BYTES:-8388608}
+      QQ_GUARDIAN_HTTP_HOST: 0.0.0.0
+      QQ_GUARDIAN_HTTP_PORT: 6099
+      QQ_GUARDIAN_DATA_DIR: /guardian/data
+      QQ_GUARDIAN_CONFIG_DIR: /guardian/config
+      # Optional first-admin bootstrap, used only while the users table is empty.
+      # Keep values in an untracked .env or secret; empty values select the local one-time file.
+      QQ_GUARDIAN_BOOTSTRAP_USERNAME: ${QQ_GUARDIAN_BOOTSTRAP_USERNAME:-}
+      QQ_GUARDIAN_BOOTSTRAP_PASSWORD: ${QQ_GUARDIAN_BOOTSTRAP_PASSWORD:-}
+      # Break-glass only. Set to 1 for one documented recovery start together
+      # with both explicit bootstrap values, then remove all three settings.
+      QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY: ${QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY:-0}
+    ports:
+      - "127.0.0.1:${GUARDIAN_HTTP_HOST_PORT:-6099}:6099"
+    volumes:
+      - guardian-data:/guardian/data
+      - guardian-config:/guardian/config
+    # Guardian does not inject into QQ and needs no Linux capabilities. Its
+    # writable state lives exclusively in the two explicit persistent volumes.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  snowluma-data:
+    name: ${SNOWLUMA_DATA_VOLUME:-qq-guardian-snowluma-data}
+  qq-client-config:
+    name: ${QQ_CLIENT_CONFIG_VOLUME:-qq-guardian-qq-config}
+  qq-client-data:
+    name: ${QQ_CLIENT_DATA_VOLUME:-qq-guardian-qq-data}
+  guardian-data:
+    name: ${GUARDIAN_DATA_VOLUME:-qq-guardian-data}
+  guardian-config:
+    name: ${GUARDIAN_CONFIG_VOLUME:-qq-guardian-config}

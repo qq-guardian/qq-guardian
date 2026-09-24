@@ -1,0 +1,26 @@
+[Unit]
+Description=QQ Guardian SnowLuma sidecar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qq-guardian
+Group=qq-guardian
+EnvironmentFile=/etc/qq-guardian/guardian.env
+WorkingDirectory=/opt/qq-guardian/dist-snowluma
+# The native service requires a system Node.js >=22.6.0 on this explicit PATH.
+# /usr/bin/env supports current distro packages installed under /usr/local/bin.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node /opt/qq-guardian/dist-snowluma/index.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/qq-guardian /etc/qq-guardian
+
+[Install]
+WantedBy=multi-user.target

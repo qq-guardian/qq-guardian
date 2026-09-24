@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "environments": {
+    "staging": {
+      "waitTimer": 0,
+      "preventSelfReview": false,
+      "protectedBranches": true,
+      "requiredReviewers": false
+    },
+    "production": {
+      "waitTimer": 0,
+      "preventSelfReview": true,
+      "protectedBranches": true,
+      "requiredReviewers": true
+    }
+  }
+}
