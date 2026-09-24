@@ -1,0 +1,463 @@
+name: Build and release
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Commit, branch, or tag to exercise without publishing
+        required: true
+        default: main
+        type: string
+      test_tag:
+        description: Non-production vX.Y.Z-test.N label; X.Y.Z must match package.json at source_ref
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.test_tag || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: release-metadata
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.merged == true &&
+       startsWith(github.event.pull_request.head.ref, 'release/version-') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      source_ref: ${{ steps.resolve.outputs.source_ref }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      publish: ${{ steps.resolve.outputs.publish }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Check out the requested dry-run source once
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve immutable source and release state
+        id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          VERSION_BRANCH: ${{ github.event.pull_request.head.ref }}
+          INPUT_REF: ${{ inputs.source_ref }}
+          INPUT_TAG: ${{ inputs.test_tag }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            source_ref="$MERGE_SHA"
+            source_sha="$MERGE_SHA"
+            tag="v${VERSION_BRANCH#release/version-}"
+            publish=true
+          else
+            source_sha="$(git rev-parse HEAD)"
+            source_ref="$source_sha"
+            tag="$INPUT_TAG"
+            publish=false
+          fi
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-test\.[0-9]+)?$ ]]; then
+            echo "Invalid release/test tag: $tag" >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          if [[ "$publish" == true && "$tag" != "v$version" ]]; then
+            echo "Test tags are dry-run only and cannot be published: $tag" >&2
+            exit 1
+          fi
+          echo "source_ref=$source_ref" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: release-quality
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Resolve dry-run commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate immutable metadata
+        env:
+          EXPECTED_SHA: ${{ needs.metadata.outputs.source_sha }}
+          EXPECTED_VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          actual_version="$(node -p "require('./package.json').version")"
+          if [[ -n "$EXPECTED_SHA" && "$actual_sha" != "$EXPECTED_SHA" ]]; then
+            echo "Source SHA changed: $actual_sha != $EXPECTED_SHA" >&2
+            exit 1
+          fi
+          if [[ "$actual_version" != "$EXPECTED_VERSION" ]]; then
+            echo "Tag/package version mismatch: $EXPECTED_VERSION != $actual_version" >&2
+            exit 1
+          fi
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run required release gates
+        run: |
+          pnpm run typecheck
+          pnpm run lint
+          pnpm run build
+          pnpm run test:ci
+          pnpm run verify:manifests
+          git diff --exit-code -- dist
+
+      - name: Package provider runtimes and source-complete lite bundle
+        run: |
+          pnpm run package:providers:versioned
+          pnpm run package:project:lite
+
+      - name: Upload common immutable assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-common-${{ steps.commit.outputs.sha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  full-bundles:
+    name: full-${{ matrix.platform }}
+    needs:
+      - metadata
+      - quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win32-x64
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_ref }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install and build from the frozen lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Package full Windows bundle and compatibility ZIP
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $nodePath = (Get-Command node).Source
+          $licensePath = Get-ChildItem -LiteralPath (Split-Path $nodePath) -File |
+            Where-Object { $_.Name -match '^LICENSE' } |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $licensePath) { throw 'Node.js LICENSE was not found beside the configured runtime' }
+          node scripts/package-project.mjs --flavor=full --platform=${{ matrix.platform }} --node-binary="$nodePath" --node-license="$licensePath" --compatibility-asset
+
+      - name: Package full Linux bundle
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          node_path="$(readlink -f "$(command -v node)")"
+          license_path=""
+          for candidate in "$(dirname "$node_path")/LICENSE" "$(dirname "$(dirname "$node_path")")/LICENSE"; do
+            if [[ -f "$candidate" ]]; then license_path="$candidate"; break; fi
+          done
+          if [[ -z "$license_path" ]]; then
+            echo 'Node.js LICENSE was not found beside the configured runtime' >&2
+            exit 1
+          fi
+          node scripts/package-project.mjs --flavor=full --platform=${{ matrix.platform }} --node-binary="$node_path" --node-license="$license_path"
+
+      - name: Verify complete bundle layout
+        run: node scripts/verify-release-layout.mjs --directory=release
+
+      - name: Upload platform bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-full-${{ matrix.platform }}-${{ github.run_id }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: ${{ needs.metadata.outputs.publish == 'true' && 'github-release' || 'release-dry-run' }}
+    needs:
+      - metadata
+      - quality
+      - full-bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - name: Check out release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_ref }}
+          persist-credentials: false
+
+      - name: Download exact common assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+
+      - name: Generate and verify aggregate checksums
+        run: |
+          node scripts/write-checksums.mjs release
+          node scripts/verify-release-assets.mjs release
+          node scripts/verify-release-layout.mjs --directory=release
+
+      - name: Attest exact release assets
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3.2.0
+        with:
+          subject-path: |
+            release/*.zip
+            release/*.tar.gz
+            release/SHA256SUMS
+
+      - name: Create immutable release tag after gated version PR
+        id: create-tag
+        if: github.event_name == 'pull_request' && needs.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+        run: |
+          error_file="$(mktemp)"
+          trap 'rm -f "$error_file"' EXIT
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" >/dev/null 2>"$error_file"; then
+            existing_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)"
+            if [[ "$existing_sha" != "$SOURCE_SHA" ]]; then
+              echo "Tag $RELEASE_TAG already resolves to $existing_sha, not $SOURCE_SHA" >&2
+              exit 1
+            fi
+            echo "Tag $RELEASE_TAG already resolves to the gated source; reusing it for this retry."
+            exit 0
+          fi
+          if ! grep -q '(HTTP 404)' "$error_file"; then
+            cat "$error_file" >&2
+            exit 1
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$RELEASE_TAG" \
+            -f "sha=$SOURCE_SHA"
+
+      - name: Prepare resumable draft GitHub Release
+        id: draft-release
+        if: needs.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          find_release() {
+            gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+              jq --arg tag "$RELEASE_TAG" '[.[][] | select(.tag_name == $tag)]'
+          }
+
+          find_release > "$response_file"
+          release_count="$(jq 'length' "$response_file")"
+          created=false
+          if [[ "$release_count" == 0 ]]; then
+            gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f "tag_name=$RELEASE_TAG" \
+              -f "name=$RELEASE_TAG" \
+              -F draft=true \
+              -F generate_release_notes=true \
+              --jq '[.]' > "$response_file"
+            release_count="$(jq 'length' "$response_file")"
+            created=true
+          fi
+
+          if [[ "$release_count" != 1 ]]; then
+            echo "Expected exactly one GitHub Release for $RELEASE_TAG, found $release_count." >&2
+            exit 1
+          fi
+
+          release_id="$(jq -r '.[0].id' "$response_file")"
+          draft="$(jq -r '.[0].draft' "$response_file")"
+          tag_name="$(jq -r '.[0].tag_name' "$response_file")"
+          if [[ ! "$release_id" =~ ^[0-9]+$ || "$tag_name" != "$RELEASE_TAG" || "$draft" != true ]]; then
+            echo "A non-draft or mismatched GitHub Release already exists for $RELEASE_TAG; refusing to mutate a published release." >&2
+            exit 1
+          fi
+          if [[ "$created" == true ]]; then
+            echo "Created verified draft release: $RELEASE_TAG ($release_id)"
+          else
+            echo "Reusing existing draft release for safe retry: $RELEASE_TAG ($release_id)"
+          fi
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload or repair draft release assets
+        if: needs.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" \
+            release/*.zip \
+            release/*.tar.gz \
+            release/*.sha256 \
+            release/SHA256SUMS \
+            --clobber
+
+      - name: Verify draft release asset set
+        if: needs.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_ID: ${{ steps.draft-release.outputs.release_id }}
+        run: |
+          if [[ ! "$RELEASE_ID" =~ ^[0-9]+$ ]]; then
+            echo "Invalid draft release id: $RELEASE_ID" >&2
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > "$response_file"
+          draft="$(jq -r '.draft' "$response_file")"
+          tag_name="$(jq -r '.tag_name' "$response_file")"
+          if [[ "$tag_name" != "$RELEASE_TAG" || "$draft" != true ]]; then
+            echo "Release $RELEASE_ID is no longer the expected draft for $RELEASE_TAG." >&2
+            exit 1
+          fi
+          if ! jq -e '.assets | all(.state == "uploaded")' "$response_file" >/dev/null; then
+            echo "Draft release contains assets that are not fully uploaded:" >&2
+            jq -r '.assets[] | select(.state != "uploaded") | "  \(.name): \(.state)"' "$response_file" >&2
+            exit 1
+          fi
+
+          find release -maxdepth 1 -type f \
+            \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.sha256' -o -name 'SHA256SUMS' \) \
+            -printf '%f\n' | LC_ALL=C sort > expected-assets.txt
+          jq -r '.assets[].name' "$response_file" | LC_ALL=C sort > remote-assets.txt
+          diff -u expected-assets.txt remote-assets.txt
+
+      - name: Publish verified draft GitHub Release
+        id: github-release
+        if: needs.metadata.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_ID: ${{ steps.draft-release.outputs.release_id }}
+        run: |
+          if [[ ! "$RELEASE_ID" =~ ^[0-9]+$ ]]; then
+            echo "Invalid draft release id: $RELEASE_ID" >&2
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false > "$response_file"
+          draft="$(jq -r '.draft' "$response_file")"
+          tag_name="$(jq -r '.tag_name' "$response_file")"
+          if [[ "$tag_name" != "$RELEASE_TAG" || "$draft" != false ]]; then
+            echo "Release $RELEASE_ID did not publish as the expected tag $RELEASE_TAG." >&2
+            exit 1
+          fi
+
+      - name: Upload dry-run assets without publishing
+        if: needs.metadata.outputs.publish != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-dry-run-${{ needs.metadata.outputs.tag }}-${{ github.run_id }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Report release state
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          PUBLISH: ${{ needs.metadata.outputs.publish }}
+          RELEASE_OUTCOME: ${{ steps.github-release.outcome }}
+          SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+        run: |
+          {
+            echo '## Release state'
+            echo
+            echo "- Tag: \`$RELEASE_TAG\`"
+            echo "- Source: \`${SOURCE_SHA:-dry-run resolved checkout}\`"
+            echo "- Release job: \`$JOB_STATUS\`"
+            echo "- GitHub Release requested: \`$PUBLISH\`; step: \`${RELEASE_OUTCOME:-not-run}\`"
+            echo '- Deployment handoff: a successful publication continues into the promotion job below'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  promote:
+    name: promote-published-release
+    if: needs.metadata.outputs.publish == 'true'
+    needs:
+      - metadata
+      - publish
+    permissions:
+      attestations: write
+      contents: write
+      deployments: write
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: ${{ needs.metadata.outputs.tag }}
+      source_sha: ${{ needs.metadata.outputs.source_sha }}
+    secrets: inherit

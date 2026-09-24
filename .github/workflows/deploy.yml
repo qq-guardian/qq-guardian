@@ -1,0 +1,640 @@
+name: Promote immutable release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z GitHub Release
+        required: true
+        type: string
+      source_sha:
+        description: Exact release commit SHA
+        required: true
+        type: string
+permissions: {}
+
+concurrency:
+  group: promote-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: deployment-metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      image: ${{ steps.resolve.outputs.image }}
+      source_sha: ${{ steps.resolve.outputs.source_sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Check out exact deployment source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Resolve and authenticate published release identity
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_SHA: ${{ inputs.source_sha }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="$INPUT_TAG"
+          source_sha="$INPUT_SHA"
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Deployment tag must be vX.Y.Z: $tag" >&2
+            exit 1
+          fi
+          if [[ ! "$source_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo 'Deployment source_sha must be an exact lowercase commit SHA' >&2
+            exit 1
+          fi
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "$actual_sha" != "$source_sha" ]]; then
+            echo "Checked-out deployment source changed: $actual_sha != $source_sha" >&2
+            exit 1
+          fi
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$tag" != "v$package_version" ]]; then
+            echo "Release tag/package version mismatch: $tag != v$package_version" >&2
+            exit 1
+          fi
+
+          release_json="$(mktemp)"
+          trap 'rm -f "$release_json"' EXIT
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" > "$release_json"
+          if [[ "$(jq -r '.tag_name' "$release_json")" != "$tag" \
+             || "$(jq -r '.draft' "$release_json")" != false \
+             || "$(jq -r '.prerelease' "$release_json")" != false \
+             || "$(jq -r '.published_at // empty' "$release_json")" == "" ]]; then
+            echo "Deployment requires an already-published, non-prerelease GitHub Release for $tag" >&2
+            exit 1
+          fi
+
+          tag_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)"
+          if [[ "$tag_sha" != "$source_sha" ]]; then
+            echo "Release tag $tag resolves to $tag_sha, not requested source $source_sha" >&2
+            exit 1
+          fi
+
+          version_branch="release/version-${tag#v}"
+          matching_prs="$(gh api -H 'Accept: application/vnd.github+json' \
+            "repos/$GITHUB_REPOSITORY/commits/$source_sha/pulls" \
+            --jq "[.[] | select(.base.ref == \"main\" and .head.ref == \"$version_branch\" and .merged_at != null)] | length")"
+          if [[ "$matching_prs" -lt 1 ]]; then
+            echo "Release source is not associated with a merged $version_branch -> main pull request" >&2
+            exit 1
+          fi
+
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+  publish-image:
+    name: publish-image-once
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    outputs:
+      artifact_sha256: ${{ steps.release.outputs.artifact_sha256 }}
+      image_digest: ${{ steps.image.outputs.digest }}
+      image: ${{ needs.metadata.outputs.image }}
+      source_sha: ${{ needs.metadata.outputs.source_sha }}
+      tag: ${{ needs.metadata.outputs.tag }}
+    steps:
+      - name: Check out deployment tooling at release SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve resumable versioned image state
+        id: existing
+        env:
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          output="$(mktemp)"
+          error="$(mktemp)"
+          trap 'rm -f "$output" "$error"' EXIT
+          set +e
+          docker buildx imagetools inspect "$IMAGE:$TAG" >"$output" 2>"$error"
+          status=$?
+          set -e
+          if [[ $status -eq 0 ]]; then
+            digest="$(sed -n 's/^Digest:[[:space:]]*//p' "$output" | head -n 1)"
+            if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "Existing versioned image has no valid immutable digest: $IMAGE:$TAG" >&2
+              exit 1
+            fi
+            docker pull "$IMAGE:$TAG" >/dev/null
+            revision="$(docker image inspect "$IMAGE:$TAG" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+            version="$(docker image inspect "$IMAGE:$TAG" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')"
+            if [[ "$revision" != "$SOURCE_SHA" || "$version" != "$TAG" ]]; then
+              echo "Existing versioned image identity does not match this release; refusing reuse" >&2
+              exit 1
+            fi
+            echo 'reuse=true' >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+            echo "Reusing immutable versioned image $IMAGE:$TAG@$digest after exact identity validation."
+          elif grep -Eiq 'manifest unknown|name unknown|not found' "$error"; then
+            echo 'reuse=false' >> "$GITHUB_OUTPUT"
+          else
+            cat "$error" >&2
+            echo 'Unable to distinguish a missing image from a registry failure; refusing to overwrite.' >&2
+            exit 1
+          fi
+
+      - name: Download exact complete release bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          mkdir -p release-input
+          gh release download "$TAG" --dir release-input \
+            --pattern releaseDownload.zip \
+            --pattern releaseDownload.zip.sha256 \
+            --pattern SHA256SUMS
+
+      - name: Verify release attestation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh attestation verify release-input/releaseDownload.zip --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify and extract immutable build context
+        id: release
+        env:
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          node scripts/verify-deployment-release.mjs \
+            --directory=release-input --tag="$TAG" --output=deployment-input.json
+          unzip -q release-input/releaseDownload.zip -d bundle
+          bundle_root="$(node -p "require('./deployment-input.json').bundleRoot")"
+          artifact_sha256="$(node -p "require('./deployment-input.json').artifact.sha256")"
+          echo "bundle_path=bundle/$bundle_root" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=$artifact_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the immutable image once
+        id: build
+        if: steps.existing.outputs.reuse != 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ steps.release.outputs.bundle_path }}
+          file: ${{ steps.release.outputs.bundle_path }}/deploy/Dockerfile
+          push: true
+          tags: ${{ needs.metadata.outputs.image }}:${{ needs.metadata.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.metadata.outputs.source_sha }}
+            org.opencontainers.image.version=${{ needs.metadata.outputs.tag }}
+            org.opencontainers.image.title=QQ Guardian SnowLuma sidecar
+          provenance: mode=max
+          sbom: true
+
+      - name: Resolve immutable image digest
+        id: image
+        env:
+          BUILT_DIGEST: ${{ steps.build.outputs.digest }}
+          EXISTING_DIGEST: ${{ steps.existing.outputs.digest }}
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          REUSE: ${{ steps.existing.outputs.reuse }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$REUSE" == true ]]; then digest="$EXISTING_DIGEST"; else digest="$BUILT_DIGEST"; fi
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Deployment did not resolve a valid OCI digest: $digest" >&2
+            exit 1
+          fi
+          actual="$(docker buildx imagetools inspect "$IMAGE:$TAG" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          if [[ "$actual" != "$digest" ]]; then
+            echo "Versioned image digest mismatch: $actual != $digest" >&2
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Attest immutable OCI image
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3.2.0
+        with:
+          subject-name: ${{ needs.metadata.outputs.image }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record manifest timestamp
+        id: timestamp
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile immutable image manifest
+        env:
+          DEPLOYMENT_ARTIFACT_SHA256: ${{ steps.release.outputs.artifact_sha256 }}
+          DEPLOYMENT_FINISHED_AT: ${{ steps.timestamp.outputs.value }}
+          DEPLOYMENT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          DEPLOYMENT_IMAGE_REFERENCE: ${{ needs.metadata.outputs.image }}
+          DEPLOYMENT_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+          DEPLOYMENT_VERSION: ${{ needs.metadata.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          manifest="guardian-image-$TAG.json"
+          asset_count="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" \
+            --jq "[.assets[] | select(.name == \"$manifest\")] | length")"
+          if [[ "$asset_count" == 0 ]]; then
+            node scripts/deployment-record.mjs image-manifest --output="$manifest"
+          elif [[ "$asset_count" == 1 ]]; then
+            mkdir -p existing-manifest
+            gh release download "$TAG" --dir existing-manifest --pattern "$manifest"
+            node scripts/deployment-record.mjs verify-image --path="existing-manifest/$manifest"
+            node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync(`existing-manifest/guardian-image-${process.env.TAG}.json`, 'utf8'));
+          const expected = {
+            version: process.env.DEPLOYMENT_VERSION,
+            sourceSha: process.env.DEPLOYMENT_SOURCE_SHA,
+            artifactName: 'releaseDownload.zip',
+            artifactSha256: process.env.DEPLOYMENT_ARTIFACT_SHA256,
+            imageReference: process.env.DEPLOYMENT_IMAGE_REFERENCE,
+            imageDigest: process.env.DEPLOYMENT_IMAGE_DIGEST,
+          };
+          const actual = {
+            version: manifest.version,
+            sourceSha: manifest.sourceSha,
+            artifactName: manifest.artifact?.name,
+            artifactSha256: manifest.artifact?.sha256,
+            imageReference: manifest.image?.reference,
+            imageDigest: manifest.image?.digest,
+          };
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            console.error({ expected, actual });
+            throw new Error('Existing deployment manifest does not match the immutable release identity');
+          }
+          NODE
+            cp "existing-manifest/$manifest" "$manifest"
+            echo "Reusing exact existing deployment manifest $manifest."
+          else
+            echo "Release contains duplicate $manifest assets; refusing deployment" >&2
+            exit 1
+          fi
+
+      - name: Attach immutable image manifest to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: gh release upload "$TAG" "guardian-image-$TAG.json" --clobber
+
+      - name: Upload image manifest for promotion jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: guardian-image-${{ needs.metadata.outputs.tag }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: guardian-image-${{ needs.metadata.outputs.tag }}.json
+          if-no-files-found: error
+          retention-days: 90
+
+  staging:
+    name: staging
+    needs:
+      - metadata
+      - publish-image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    concurrency:
+      group: staging-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: write
+      packages: write
+    steps:
+      - name: Capture deployment start
+        id: started
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download immutable image manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: guardian-image-${{ needs.metadata.outputs.tag }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-input
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install locked smoke dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read previous staging state
+        id: previous
+        env:
+          IMAGE: ${{ needs.metadata.outputs.image }}
+        run: |
+          version=''
+          digest=''
+          if docker pull "$IMAGE:staging" >/dev/null 2>&1; then
+            version="$(docker image inspect "$IMAGE:staging" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || true)"
+            repo_digest="$(docker image inspect "$IMAGE:staging" --format '{{ index .RepoDigests 0 }}' 2>/dev/null || true)"
+            digest="${repo_digest##*@}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            version=''
+            digest=''
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Run staging provider and image smoke matrix
+        id: smoke
+        env:
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+        run: |
+          node --experimental-strip-types --test --test-reporter=spec \
+            test/integration/auth-sessions.test.ts \
+            test/integration/migration.test.ts \
+            test/integration/snowluma-provider-transports.test.ts \
+            test/unit/napcat-runtime-host.test.ts
+          node scripts/smoke-deployment-image.mjs --image="$IMAGE@$DIGEST"
+
+      - name: Promote exact digest to staging alias
+        id: promote
+        env:
+          DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          PREVIOUS_DIGEST: ${{ steps.previous.outputs.digest }}
+        run: |
+          if ! docker buildx imagetools create --tag "$IMAGE:staging" "$IMAGE@$DIGEST"; then
+            if [[ -n "$PREVIOUS_DIGEST" ]]; then docker buildx imagetools create --tag "$IMAGE:staging" "$IMAGE@$PREVIOUS_DIGEST"; fi
+            exit 1
+          fi
+          actual="$(docker buildx imagetools inspect "$IMAGE:staging" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          if [[ "$actual" != "$DIGEST" ]]; then
+            if [[ -n "$PREVIOUS_DIGEST" ]]; then docker buildx imagetools create --tag "$IMAGE:staging" "$IMAGE@$PREVIOUS_DIGEST"; fi
+            echo "Staging alias digest mismatch: $actual != $DIGEST" >&2
+            exit 1
+          fi
+
+      - name: Capture deployment finish
+        id: finished
+        if: always()
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Write staging deployment record
+        id: record
+        if: always()
+        env:
+          DEPLOYMENT_ARTIFACT_SHA256: ${{ needs.publish-image.outputs.artifact_sha256 }}
+          DEPLOYMENT_ENVIRONMENT: staging
+          DEPLOYMENT_FINISHED_AT: ${{ steps.finished.outputs.value }}
+          DEPLOYMENT_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+          DEPLOYMENT_IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+          DEPLOYMENT_IMAGE_REFERENCE: ${{ needs.metadata.outputs.image }}
+          DEPLOYMENT_KIND: promotion
+          DEPLOYMENT_PREVIOUS_DIGEST: ${{ steps.previous.outputs.digest }}
+          DEPLOYMENT_PREVIOUS_VERSION: ${{ steps.previous.outputs.version }}
+          DEPLOYMENT_RESULT: ${{ steps.smoke.outcome == 'success' && steps.promote.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SMOKE_CHECKS: config-migration,napcat-contract,snowluma-http-ws-auth-actions-events,container-startup
+          DEPLOYMENT_SMOKE_RESULT: ${{ steps.smoke.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+          DEPLOYMENT_STARTED_AT: ${{ steps.started.outputs.value }}
+          DEPLOYMENT_VERSION: ${{ needs.metadata.outputs.tag }}
+        run: node scripts/deployment-record.mjs record --output=deployment-staging.json
+
+      - name: Preserve staging deployment record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: deployment-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-staging.json
+          if-no-files-found: error
+          retention-days: 90
+
+  production:
+    name: production
+    needs:
+      - metadata
+      - publish-image
+      - staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      deployments: write
+      packages: write
+    steps:
+      - name: Capture deployment start
+        id: started
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download immutable image manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: guardian-image-${{ needs.metadata.outputs.tag }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-input
+
+      - name: Download successful staging record
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: deployment-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-input
+
+      - name: Assert build-once promotion invariant
+        run: >-
+          node scripts/deployment-record.mjs assert-promotion
+          --staging=deployment-input/deployment-staging.json
+          --image=deployment-input/guardian-image-${{ needs.metadata.outputs.tag }}.json
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install locked smoke dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read previous production state
+        id: previous
+        env:
+          IMAGE: ${{ needs.metadata.outputs.image }}
+        run: |
+          version=''
+          digest=''
+          if docker pull "$IMAGE:production" >/dev/null 2>&1; then
+            version="$(docker image inspect "$IMAGE:production" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' 2>/dev/null || true)"
+            repo_digest="$(docker image inspect "$IMAGE:production" --format '{{ index .RepoDigests 0 }}' 2>/dev/null || true)"
+            digest="${repo_digest##*@}"
+          fi
+          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            version=''
+            digest=''
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Run production smoke against the staged digest
+        id: smoke
+        env:
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+        run: |
+          node --experimental-strip-types --test --test-reporter=spec \
+            test/integration/auth-sessions.test.ts \
+            test/integration/migration.test.ts \
+            test/integration/snowluma-provider-transports.test.ts \
+            test/unit/napcat-runtime-host.test.ts
+          node scripts/smoke-deployment-image.mjs --image="$IMAGE@$DIGEST"
+
+      - name: Promote exact digest to production alias
+        id: promote
+        env:
+          DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+          IMAGE: ${{ needs.metadata.outputs.image }}
+          PREVIOUS_DIGEST: ${{ steps.previous.outputs.digest }}
+        run: |
+          if ! docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$DIGEST"; then
+            if [[ -n "$PREVIOUS_DIGEST" ]]; then docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$PREVIOUS_DIGEST"; fi
+            exit 1
+          fi
+          actual="$(docker buildx imagetools inspect "$IMAGE:production" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          if [[ "$actual" != "$DIGEST" ]]; then
+            if [[ -n "$PREVIOUS_DIGEST" ]]; then docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$PREVIOUS_DIGEST"; fi
+            echo "Production alias digest mismatch: $actual != $DIGEST" >&2
+            exit 1
+          fi
+
+      - name: Capture deployment finish
+        id: finished
+        if: always()
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Write production deployment record
+        if: always()
+        env:
+          DEPLOYMENT_ARTIFACT_SHA256: ${{ needs.publish-image.outputs.artifact_sha256 }}
+          DEPLOYMENT_ENVIRONMENT: production
+          DEPLOYMENT_FINISHED_AT: ${{ steps.finished.outputs.value }}
+          DEPLOYMENT_ID: ${{ github.run_id }}.${{ github.run_attempt }}
+          DEPLOYMENT_IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+          DEPLOYMENT_IMAGE_REFERENCE: ${{ needs.metadata.outputs.image }}
+          DEPLOYMENT_KIND: promotion
+          DEPLOYMENT_PREVIOUS_DIGEST: ${{ steps.previous.outputs.digest }}
+          DEPLOYMENT_PREVIOUS_VERSION: ${{ steps.previous.outputs.version }}
+          DEPLOYMENT_RESULT: ${{ steps.smoke.outcome == 'success' && steps.promote.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SMOKE_CHECKS: config-migration,napcat-contract,snowluma-http-ws-auth-actions-events,container-startup
+          DEPLOYMENT_SMOKE_RESULT: ${{ steps.smoke.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SOURCE_SHA: ${{ needs.metadata.outputs.source_sha }}
+          DEPLOYMENT_STARTED_AT: ${{ steps.started.outputs.value }}
+          DEPLOYMENT_VERSION: ${{ needs.metadata.outputs.tag }}
+        run: node scripts/deployment-record.mjs record --output=deployment-production.json
+
+      - name: Preserve production deployment record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: deployment-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-production.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach permanent production record to release
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          permanent="deployment-production-$TAG-${{ github.run_id }}-${{ github.run_attempt }}.json"
+          cp deployment-production.json "$permanent"
+          gh release upload "$TAG" "$permanent"
+
+      - name: Report distinct deployment state
+        if: always()
+        env:
+          DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+          PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          {
+            echo '## Production deployment state'
+            echo
+            echo "- Release: \`$TAG\` (already published)"
+            echo '- Staging: `success` (required dependency)'
+            echo "- Production smoke: \`${SMOKE_OUTCOME:-not-run}\`"
+            echo "- Production promotion: \`${PROMOTE_OUTCOME:-not-run}\`"
+            echo "- Immutable image: \`$DIGEST\`"
+            echo '- External user-owned NapCat/SnowLuma hosts: `not executed`'
+          } >> "$GITHUB_STEP_SUMMARY"
