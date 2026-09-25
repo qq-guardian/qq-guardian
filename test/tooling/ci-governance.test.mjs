@@ -26,20 +26,20 @@ describe('CI and repository governance', () => {
   it('rejects mutable action tags and a removed security scanner', () => {
     const mutable = workflow
       .replace('actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1', 'actions/checkout@v7')
-      .replace('gitleaks/gitleaks-action@', 'removed/gitleaks-action@');
+      .replace('gitleaks detect --source . --no-banner', '# secret scan disabled');
     const errors = verifyCiGovernance({ workflow: mutable, dependabot, packageJson });
     assert.match(errors.join('\n'), /immutable 40-character commit SHA/);
-    assert.match(errors.join('\n'), /missing required action gitleaks\/gitleaks-action/);
+    assert.match(errors.join('\n'), /security: missing executable command gitleaks detect/);
   });
 
   it('does not accept a required action that survives only in a YAML comment', () => {
     const commented = workflow.replace(
-      '        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0',
-      '        # uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e',
+      '        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0',
+      '        # uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294',
     );
     const errors = verifyCiGovernance({ workflow: commented, dependabot, packageJson }).join('\n');
-    assert.match(errors, /missing required action gitleaks\/gitleaks-action/);
-    assert.match(errors, /security: missing gitleaks\/gitleaks-action@/);
+    assert.match(errors, /missing required action actions\/dependency-review-action/);
+    assert.match(errors, /security: missing actions\/dependency-review-action@/);
   });
 
   it('does not accept required shell commands that are only printed', () => {
