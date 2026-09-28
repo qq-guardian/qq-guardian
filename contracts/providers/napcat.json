@@ -1,0 +1,121 @@
+{
+  "provider": "napcat",
+  "matrix": {
+    "transports": [
+      { "id": "plugin-api", "status": "supported", "evidence": "test/unit/napcat-runtime-host.test.ts" },
+      { "id": "forward-websocket", "status": "unsupported", "reason": "NapCat runs Guardian in-process through its plugin API." },
+      { "id": "reverse-websocket", "status": "unsupported", "reason": "The in-process NapCat adapter does not open a reverse WebSocket endpoint." },
+      { "id": "http", "status": "unsupported", "reason": "The in-process NapCat adapter does not use standalone HTTP action/event endpoints." }
+    ],
+    "actions": [
+      { "id": "get_login_info", "status": "supported", "evidence": "src/modules/groups/index.ts" },
+      { "id": "get_group_list", "status": "supported", "evidence": "src/modules/groups/index.ts" },
+      { "id": "get_group_member_info", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "get_group_system_msg", "status": "supported", "evidence": "src/modules/approval/sync.ts" },
+      { "id": "send_group_msg", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "send_private_msg", "status": "supported", "evidence": "src/modules/captcha/index.ts" },
+      { "id": "delete_msg", "status": "supported", "evidence": "src/modules/risk/index.ts" },
+      { "id": "set_group_ban", "status": "supported", "evidence": "test/unit/punishment-escalation.test.ts" },
+      { "id": "set_group_kick", "status": "supported", "evidence": "test/unit/punishment-escalation.test.ts" },
+      { "id": "set_group_whole_ban", "status": "supported", "evidence": "test/unit/curfew-shutdown.test.ts" },
+      { "id": "set_group_add_request", "status": "supported", "evidence": "test/unit/moderation-concurrency.test.ts" }
+    ],
+    "events": [
+      { "id": "message.group", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "message.private", "status": "supported", "evidence": "test/unit/moderation-concurrency.test.ts" },
+      { "id": "request.group.add", "status": "supported", "evidence": "test/unit/approval-policy.test.ts" },
+      { "id": "notice.group_increase", "status": "supported", "evidence": "test/unit/member-join-pipeline.test.ts" },
+      { "id": "message_sent", "status": "ignored", "evidence": "src/handlers/message.ts" },
+      { "id": "meta_event", "status": "ignored", "evidence": "src/handlers/event.ts" },
+      { "id": "request.friend", "status": "unsupported", "reason": "Guardian has no friend-request moderation feature." }
+    ],
+    "messages": [
+      { "id": "segment.text", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.at", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.reply", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.json", "status": "supported", "evidence": "test/unit/features.test.ts" },
+      { "id": "segment.miniapp", "status": "supported", "evidence": "test/unit/features.test.ts" },
+      { "id": "segment.other", "status": "ignored", "evidence": "src/modules/commands/index.ts" }
+    ]
+  },
+  "cases": [
+    {
+      "name": "approve a pending group request",
+      "schema": "action-request",
+      "covers": [
+        "actions:set_group_add_request"
+      ],
+      "payload": {
+        "action": "set_group_add_request",
+        "params": {
+          "flag": "request-flag-1",
+          "sub_type": "add",
+          "approve": true
+        },
+        "echo": "napcat-contract-1"
+      }
+    },
+    {
+      "name": "void NapCat action normalizes to a successful null response",
+      "schema": "action-response",
+      "covers": [
+        "transports:plugin-api"
+      ],
+      "payload": {
+        "status": "ok",
+        "retcode": 0,
+        "data": null,
+        "echo": "napcat-contract-1"
+      }
+    },
+    {
+      "name": "group message event",
+      "schema": "event",
+      "covers": [
+        "events:message.group",
+        "messages:segment.text"
+      ],
+      "payload": {
+        "time": 1767225600,
+        "self_id": 10001,
+        "post_type": "message",
+        "message_type": "group",
+        "message_id": 50001,
+        "user_id": 20001,
+        "group_id": 30001,
+        "sender": {
+          "user_id": 20001,
+          "nickname": "operator",
+          "role": "admin"
+        },
+        "message": [
+          {
+            "type": "text",
+            "data": {
+              "text": "hello"
+            }
+          }
+        ],
+        "raw_message": "hello"
+      }
+    },
+    {
+      "name": "group join request event",
+      "schema": "event",
+      "covers": [
+        "events:request.group.add"
+      ],
+      "payload": {
+        "time": 1767225601,
+        "self_id": 10001,
+        "post_type": "request",
+        "request_type": "group",
+        "sub_type": "add",
+        "group_id": 30001,
+        "user_id": 20002,
+        "comment": "please add me",
+        "flag": "request-flag-2"
+      }
+    }
+  ]
+}

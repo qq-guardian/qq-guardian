@@ -1,0 +1,49 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+
+# ── Lock files ────────────────────────────────────────────────────────────────
+# pnpm-lock.yaml is the canonical lock file (CI and the README both use pnpm).
+# Other package managers' lock files must never be committed alongside it.
+package-lock.json
+yarn.lock
+bun.lockb
+.yarn/
+
+# ── Build / release output ────────────────────────────────────────────────────
+# dist/ IS committed for the NapCat drop-in package (CI verifies it stays in
+# sync with src/). SnowLuma is a generated standalone target and is not kept in
+# git; build/package commands recreate it deterministically.
+dist/*.map
+dist-snowluma/
+release/
+# The source checkout loads the canonical committed dist/ target. Root bundles
+# are stale duplicate build outputs and must never be reintroduced.
+/index.mjs
+/index.mjs.map
+
+# ── Avoid accidentally regenerating SnowLuma target from local work ───────────
+!dist-snowluma/index.mjs
+
+# ── Local runtime artifacts ───────────────────────────────────────────────────
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ── Test / coverage output ────────────────────────────────────────────────────
+coverage/
+*.lcov
+.nyc_output/
+
+# ── OS / editor artifacts ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# ── Environment files ─────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example

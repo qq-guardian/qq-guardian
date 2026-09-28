@@ -1,0 +1,61 @@
+name: Deploy published release
+
+on:
+  release:
+    types:
+      - published
+
+permissions: {}
+
+jobs:
+  resolve:
+    name: resolve-published-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Resolve immutable published release identity
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_DRAFT: ${{ github.event.release.draft }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          if [[ "$RELEASE_DRAFT" != false || "$RELEASE_PRERELEASE" != false ]]; then
+            echo 'Only a published, non-prerelease GitHub Release may enter production deployment.' >&2
+            exit 1
+          fi
+          if [[ ! "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Deployment tag must be stable vX.Y.Z: $tag" >&2
+            exit 1
+          fi
+          source_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)"
+          if [[ ! "$source_sha" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "Release tag did not resolve to an exact commit SHA: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: deploy-published-release
+    needs: resolve
+    permissions:
+      attestations: write
+      contents: write
+      deployments: write
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: ${{ needs.resolve.outputs.tag }}
+      source_sha: ${{ needs.resolve.outputs.source_sha }}
+    secrets: inherit

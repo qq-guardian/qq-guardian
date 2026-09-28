@@ -1,0 +1,12 @@
+name: qq-guardian-codeql
+
+paths:
+  - src
+  - scripts
+  - webui
+
+paths-ignore:
+  - dist
+  - dist-snowluma
+  - release
+  - node_modules

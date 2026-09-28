@@ -1,0 +1,279 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qq-guardian.invalid/contracts/onebot-v11/event.schema.json",
+  "title": "Guardian OneBot v11 event",
+  "definitions": {
+    "identifier": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 20,
+          "format": "onebot-uint64"
+        }
+      ]
+    },
+    "messageIdentifier": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": -1
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 20,
+          "format": "onebot-message-id"
+        }
+      ]
+    },
+    "base": {
+      "type": "object",
+      "required": [
+        "time",
+        "self_id",
+        "post_type"
+      ],
+      "properties": {
+        "time": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "self_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "post_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "sender": {
+      "type": "object",
+      "required": [
+        "user_id",
+        "nickname"
+      ],
+      "properties": {
+        "user_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "nickname": {
+          "type": "string"
+        },
+        "card": {
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "member"
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/definitions/base"
+    }
+  ],
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "post_type",
+        "message_type",
+        "message_id",
+        "user_id",
+        "message",
+        "raw_message",
+        "sender"
+      ],
+      "properties": {
+        "post_type": {
+          "enum": [
+            "message",
+            "message_sent"
+          ]
+        },
+        "message_type": {
+          "enum": [
+            "private",
+            "group"
+          ]
+        },
+        "message_id": {
+          "$ref": "#/definitions/messageIdentifier"
+        },
+        "user_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "group_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "data"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "data": {
+                    "type": "object"
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          ]
+        },
+        "raw_message": {
+          "type": "string"
+        },
+        "sender": {
+          "$ref": "#/definitions/sender"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "message_type": {
+              "const": "private"
+            }
+          }
+        },
+        {
+          "required": [
+            "group_id"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "group"
+            },
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "required": [
+        "post_type",
+        "request_type",
+        "user_id",
+        "comment",
+        "flag"
+      ],
+      "properties": {
+        "post_type": {
+          "const": "request"
+        },
+        "request_type": {
+          "enum": [
+            "group",
+            "friend"
+          ]
+        },
+        "user_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "group_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "comment": {
+          "type": "string"
+        },
+        "flag": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "group_id"
+          ],
+          "properties": {
+            "request_type": {
+              "const": "group"
+            }
+          }
+        },
+        {
+          "properties": {
+            "request_type": {
+              "const": "friend"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "object",
+      "required": [
+        "post_type",
+        "notice_type"
+      ],
+      "properties": {
+        "post_type": {
+          "const": "notice"
+        },
+        "notice_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "user_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "group_id": {
+          "$ref": "#/definitions/identifier"
+        },
+        "operator_id": {
+          "$ref": "#/definitions/identifier"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "post_type",
+        "meta_event_type"
+      ],
+      "properties": {
+        "post_type": {
+          "const": "meta_event"
+        },
+        "meta_event_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  ]
+}

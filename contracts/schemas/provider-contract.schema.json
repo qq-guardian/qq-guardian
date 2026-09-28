@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qq-guardian.invalid/contracts/provider-contract.schema.json",
+  "title": "Guardian provider compatibility contract",
+  "type": "object",
+  "required": [
+    "provider",
+    "matrix",
+    "cases"
+  ],
+  "properties": {
+    "provider": {
+      "enum": [
+        "napcat",
+        "snowluma"
+      ]
+    },
+    "matrix": {
+      "type": "object",
+      "required": [
+        "transports",
+        "actions",
+        "events",
+        "messages"
+      ],
+      "properties": {
+        "transports": {
+          "$ref": "#/definitions/capabilities"
+        },
+        "actions": {
+          "$ref": "#/definitions/capabilities"
+        },
+        "events": {
+          "$ref": "#/definitions/capabilities"
+        },
+        "messages": {
+          "$ref": "#/definitions/capabilities"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/case"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/capability"
+      }
+    },
+    "capability": {
+      "type": "object",
+      "required": [
+        "id",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$"
+        },
+        "status": {
+          "enum": [
+            "supported",
+            "ignored",
+            "unsupported"
+          ]
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        }
+      },
+      "additionalProperties": false
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "name",
+        "schema",
+        "covers",
+        "payload"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "schema": {
+          "enum": [
+            "action-request",
+            "action-response",
+            "event"
+          ]
+        },
+        "covers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

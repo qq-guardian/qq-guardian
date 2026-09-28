@@ -1,0 +1,5 @@
+{$GUARDIAN_DOMAIN} {
+  encode zstd gzip
+
+  reverse_proxy guardian:6099
+}

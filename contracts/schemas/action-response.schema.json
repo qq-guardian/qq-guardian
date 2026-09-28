@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qq-guardian.invalid/contracts/onebot-v11/action-response.schema.json",
+  "title": "Guardian OneBot v11 action response",
+  "type": "object",
+  "required": [
+    "status",
+    "retcode",
+    "data",
+    "echo"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ]
+    },
+    "retcode": {
+      "type": "integer"
+    },
+    "data": {},
+    "message": {
+      "type": "string"
+    },
+    "wording": {
+      "type": "string"
+    },
+    "echo": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,29 @@
+title = "qq-guardian Gitleaks policy"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Historical synthetic API-key fixture in QG-004/QG-008 regression tests; not a credential."
+condition = "AND"
+commits = [
+  "981e85ce9e912f4d98509f71f97cca88da8c810b",
+]
+paths = [
+  '''test/unit/security-regression\.test\.ts$''',
+]
+regexTarget = "line"
+regexes = [
+  '''xyzzy-must-not-hit-disk-unit-test-abcdef''',
+]
+
+[[allowlists]]
+description = "Commented-out .env.example placeholder; not a credential — entropy 3.59, value is a documentation instruction, not a live secret."
+condition = "AND"
+paths = [
+  '''deploy/\.env\.example$''',
+]
+regexTarget = "line"
+regexes = [
+  '''replace-with-a-64-char-hex-secret''',
+]

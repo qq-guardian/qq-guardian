@@ -1,0 +1,146 @@
+{
+  "provider": "snowluma",
+  "matrix": {
+    "transports": [
+      { "id": "forward-websocket-native", "status": "supported", "evidence": "test/unit/snowluma-client.test.ts" },
+      { "id": "forward-websocket-sdk", "status": "supported", "evidence": "test/unit/snowluma-transport.test.ts" },
+      { "id": "reverse-websocket", "status": "supported", "evidence": "test/integration/snowluma-provider-transports.test.ts" },
+      { "id": "http-action", "status": "supported", "evidence": "test/integration/snowluma-provider-transports.test.ts" },
+      { "id": "http-events", "status": "supported", "evidence": "test/integration/snowluma-provider-transports.test.ts" }
+    ],
+    "actions": [
+      { "id": "get_login_info", "status": "supported", "evidence": "src/modules/groups/index.ts" },
+      { "id": "get_group_list", "status": "supported", "evidence": "src/modules/groups/index.ts" },
+      { "id": "get_group_member_info", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "get_group_system_msg", "status": "supported", "evidence": "src/modules/approval/sync.ts" },
+      { "id": "send_group_msg", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "send_private_msg", "status": "supported", "evidence": "src/modules/captcha/index.ts" },
+      { "id": "delete_msg", "status": "supported", "evidence": "src/modules/risk/index.ts" },
+      { "id": "set_group_ban", "status": "supported", "evidence": "test/unit/punishment-escalation.test.ts" },
+      { "id": "set_group_kick", "status": "supported", "evidence": "test/unit/punishment-escalation.test.ts" },
+      { "id": "set_group_whole_ban", "status": "supported", "evidence": "test/unit/curfew-shutdown.test.ts" },
+      { "id": "set_group_add_request", "status": "supported", "evidence": "test/unit/moderation-concurrency.test.ts" }
+    ],
+    "events": [
+      { "id": "message.group", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "message.private", "status": "supported", "evidence": "test/unit/moderation-concurrency.test.ts" },
+      { "id": "request.group.add", "status": "supported", "evidence": "test/unit/approval-policy.test.ts" },
+      { "id": "notice.group_increase", "status": "supported", "evidence": "test/unit/member-join-pipeline.test.ts" },
+      { "id": "message_sent", "status": "ignored", "evidence": "src/handlers/message.ts" },
+      { "id": "meta_event", "status": "ignored", "evidence": "src/snowluma.ts" },
+      { "id": "request.friend", "status": "unsupported", "reason": "Guardian has no friend-request moderation feature." }
+    ],
+    "messages": [
+      { "id": "segment.text", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.at", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.reply", "status": "supported", "evidence": "test/unit/command-authorization.test.ts" },
+      { "id": "segment.json", "status": "supported", "evidence": "test/unit/features.test.ts" },
+      { "id": "segment.miniapp", "status": "supported", "evidence": "test/unit/features.test.ts" },
+      { "id": "segment.other", "status": "ignored", "evidence": "src/modules/commands/index.ts" }
+    ]
+  },
+  "cases": [
+    {
+      "name": "query a group member over the standalone transport",
+      "schema": "action-request",
+      "covers": [
+        "actions:get_group_member_info",
+        "transports:http-action"
+      ],
+      "payload": {
+        "action": "get_group_member_info",
+        "params": {
+          "group_id": "9007199254740993",
+          "user_id": "9007199254740995",
+          "no_cache": true
+        },
+        "echo": "snowluma-contract-1"
+      }
+    },
+    {
+      "name": "SnowLuma action response preserves provider extensions",
+      "schema": "action-response",
+      "covers": [
+        "transports:forward-websocket-native",
+        "transports:forward-websocket-sdk",
+        "transports:reverse-websocket"
+      ],
+      "payload": {
+        "status": "ok",
+        "retcode": 0,
+        "data": {
+          "role": "member"
+        },
+        "echo": "snowluma-contract-1",
+        "provider_trace": "trace-1"
+      }
+    },
+    {
+      "name": "large identifiers remain canonical strings on ingress",
+      "schema": "event",
+      "covers": [
+        "events:notice.group_increase"
+      ],
+      "payload": {
+        "time": 1767225602,
+        "self_id": "9007199254740993",
+        "post_type": "notice",
+        "notice_type": "group_increase",
+        "sub_type": "approve",
+        "group_id": "9007199254740994",
+        "operator_id": "9007199254740995",
+        "user_id": "9007199254740996"
+      }
+    },
+    {
+      "name": "heartbeat meta event",
+      "schema": "event",
+      "covers": [
+        "events:meta_event",
+        "transports:http-events"
+      ],
+      "payload": {
+        "time": 1767225603,
+        "self_id": 10001,
+        "post_type": "meta_event",
+        "meta_event_type": "heartbeat",
+        "status": {
+          "online": true,
+          "good": true
+        },
+        "interval": 5000
+      }
+    },
+    {
+      "name": "group text message over standalone transport",
+      "schema": "event",
+      "covers": [
+        "events:message.group",
+        "messages:segment.text"
+      ],
+      "payload": {
+        "time": 1767225604,
+        "self_id": "9007199254740993",
+        "post_type": "message",
+        "message_type": "group",
+        "message_id": "-42",
+        "user_id": "9007199254740995",
+        "group_id": "9007199254740996",
+        "sender": {
+          "user_id": "9007199254740995",
+          "nickname": "operator",
+          "role": "admin"
+        },
+        "message": [
+          {
+            "type": "text",
+            "data": {
+              "text": "hello"
+            }
+          }
+        ],
+        "raw_message": "hello"
+      }
+    }
+  ]
+}

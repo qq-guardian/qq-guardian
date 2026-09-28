@@ -1,0 +1,259 @@
+name: Emergency rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Previous successful production version, or previous to select automatically
+        required: true
+        default: previous
+        type: string
+      history_depth:
+        description: Maximum number of distinct production image states to inspect
+        required: true
+        default: '10'
+        type: string
+      reason:
+        description: Incident or change reference for the immutable rollback audit record
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: resolve-immutable-rollback-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      current_digest: ${{ steps.current.outputs.digest }}
+      current_version: ${{ steps.current.outputs.version }}
+      image: ${{ steps.current.outputs.image }}
+      target_artifact_sha256: ${{ steps.target.outputs.artifact_sha256 }}
+      target_digest: ${{ steps.target.outputs.digest }}
+      target_source_sha: ${{ steps.target.outputs.source_sha }}
+      target_version: ${{ steps.target.outputs.version }}
+    steps:
+      - name: Check out rollback tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image identity and current production alias
+        id: current
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: |
+          image="${IMAGE,,}"
+          docker pull "$image:production" >/dev/null
+          version="$(docker image inspect "$image:production" --format '{{ index .Config.Labels "org.opencontainers.image.version" }}')"
+          digest="$(docker buildx imagetools inspect "$image:production" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          if [[ ! "$version" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Production alias has no immutable version label: $version" >&2
+            exit 1
+          fi
+          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "Production alias has no immutable digest: $digest" >&2
+            exit 1
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Collect the bounded production deployment history
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p history
+          while IFS= read -r release_tag; do
+            [[ "$release_tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || continue
+            mkdir -p "history/$release_tag"
+            if ! gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+              --dir "history/$release_tag" --pattern 'deployment-production-*.json' >/dev/null 2>&1; then
+              rmdir "history/$release_tag" 2>/dev/null || true
+            fi
+          done < <(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName')
+
+      - name: Select previous immutable production image
+        id: target
+        env:
+          CURRENT_VERSION: ${{ steps.current.outputs.version }}
+          CURRENT_DIGEST: ${{ steps.current.outputs.digest }}
+          TARGET: ${{ inputs.target }}
+          HISTORY_DEPTH: ${{ inputs.history_depth }}
+        run: |
+          node scripts/resolve-rollback-target.mjs \
+            --directory=history --target="$TARGET" \
+            --current-version="$CURRENT_VERSION" --current-digest="$CURRENT_DIGEST" \
+            --limit="$HISTORY_DEPTH" --output=rollback-target.json
+          node --input-type=module -e "import { readFileSync } from 'node:fs'; const value = JSON.parse(readFileSync('rollback-target.json', 'utf8')); const target = value.selected; for (const [key, output] of [['version', target.version], ['digest', target.image.digest], ['source_sha', target.sourceSha], ['artifact_sha256', target.artifact.sha256]]) console.log(key + '=' + output);" >> "$GITHUB_OUTPUT"
+          node --input-type=module -e "import { readFileSync, writeFileSync } from 'node:fs'; const value = JSON.parse(readFileSync('rollback-target.json', 'utf8')); writeFileSync('target-record.json', JSON.stringify(value.selected, null, 2) + '\\n');"
+
+      - name: Download and authenticate the target image manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          mkdir -p target
+          gh release download "$TARGET_VERSION" --repo "$GITHUB_REPOSITORY" \
+            --dir target --pattern "guardian-image-$TARGET_VERSION.json"
+          node scripts/deployment-record.mjs verify-image \
+            --path="target/guardian-image-$TARGET_VERSION.json"
+          node scripts/deployment-record.mjs assert-deployment \
+            --record=target-record.json --image="target/guardian-image-$TARGET_VERSION.json"
+
+      - name: Summarize rollback selection
+        env:
+          CURRENT_VERSION: ${{ steps.current.outputs.version }}
+          CURRENT_DIGEST: ${{ steps.current.outputs.digest }}
+          TARGET_VERSION: ${{ steps.target.outputs.version }}
+          TARGET_DIGEST: ${{ steps.target.outputs.digest }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          {
+            echo '## Immutable rollback selection'
+            echo
+            echo "- Reason: `$REASON`"
+            echo "- Current production: `$CURRENT_VERSION@$CURRENT_DIGEST`"
+            echo "- Selected immutable target: `$TARGET_VERSION@$TARGET_DIGEST`"
+            echo '- No image build or publish is performed by this workflow.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  rollback:
+    name: production-rollback
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: write
+      deployments: write
+      packages: write
+    steps:
+      - name: Check out rollback tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Capture rollback start
+        id: started
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke the exact target digest before promotion
+        id: smoke
+        env:
+          IMAGE: ${{ needs.resolve.outputs.image }}
+          DIGEST: ${{ needs.resolve.outputs.target_digest }}
+        run: node scripts/smoke-deployment-image.mjs --image="$IMAGE@$DIGEST"
+
+      - name: Promote exact target digest to production
+        id: promote
+        env:
+          IMAGE: ${{ needs.resolve.outputs.image }}
+          TARGET_DIGEST: ${{ needs.resolve.outputs.target_digest }}
+          PREVIOUS_DIGEST: ${{ needs.resolve.outputs.current_digest }}
+        run: |
+          if ! docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$TARGET_DIGEST"; then
+            docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$PREVIOUS_DIGEST" || true
+            exit 1
+          fi
+          actual="$(docker buildx imagetools inspect "$IMAGE:production" | sed -n 's/^Digest:[[:space:]]*//p' | head -n 1)"
+          if [[ "$actual" != "$TARGET_DIGEST" ]]; then
+            docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$PREVIOUS_DIGEST" || true
+            echo "Production rollback alias digest mismatch: $actual != $TARGET_DIGEST" >&2
+            exit 1
+          fi
+
+      - name: Capture rollback finish
+        id: finished
+        if: always()
+        run: echo "value=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" >> "$GITHUB_OUTPUT"
+
+      - name: Write immutable rollback record
+        if: always()
+        env:
+          DEPLOYMENT_ARTIFACT_SHA256: ${{ needs.resolve.outputs.target_artifact_sha256 }}
+          DEPLOYMENT_ENVIRONMENT: production
+          DEPLOYMENT_FINISHED_AT: ${{ steps.finished.outputs.value }}
+          DEPLOYMENT_ID: rollback.${{ github.run_id }}.${{ github.run_attempt }}
+          DEPLOYMENT_IMAGE_DIGEST: ${{ needs.resolve.outputs.target_digest }}
+          DEPLOYMENT_IMAGE_REFERENCE: ${{ needs.resolve.outputs.image }}
+          DEPLOYMENT_KIND: rollback
+          DEPLOYMENT_PREVIOUS_DIGEST: ${{ needs.resolve.outputs.current_digest }}
+          DEPLOYMENT_PREVIOUS_VERSION: ${{ needs.resolve.outputs.current_version }}
+          DEPLOYMENT_RESULT: ${{ steps.smoke.outcome == 'success' && steps.promote.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_ROLLBACK_RESULT: ${{ steps.smoke.outcome == 'success' && steps.promote.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SMOKE_CHECKS: config-migration,napcat-contract,snowluma-http-ws-auth-actions-events,container-startup
+          DEPLOYMENT_SMOKE_RESULT: ${{ steps.smoke.outcome == 'success' && 'success' || 'failure' }}
+          DEPLOYMENT_SOURCE_SHA: ${{ needs.resolve.outputs.target_source_sha }}
+          DEPLOYMENT_STARTED_AT: ${{ steps.started.outputs.value }}
+          DEPLOYMENT_VERSION: ${{ needs.resolve.outputs.target_version }}
+        run: node scripts/deployment-record.mjs record --output=deployment-rollback.json
+
+      - name: Preserve rollback record
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: deployment-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: deployment-rollback.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach permanent rollback record to target release
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_VERSION: ${{ needs.resolve.outputs.target_version }}
+        run: |
+          permanent="deployment-rollback-$TARGET_VERSION-${{ github.run_id }}-${{ github.run_attempt }}.json"
+          cp deployment-rollback.json "$permanent"
+          gh release upload "$TARGET_VERSION" "$permanent"
+
+      - name: Report distinct rollback state
+        if: always()
+        env:
+          CURRENT_VERSION: ${{ needs.resolve.outputs.current_version }}
+          CURRENT_DIGEST: ${{ needs.resolve.outputs.current_digest }}
+          TARGET_VERSION: ${{ needs.resolve.outputs.target_version }}
+          TARGET_DIGEST: ${{ needs.resolve.outputs.target_digest }}
+          PROMOTE_OUTCOME: ${{ steps.promote.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        run: |
+          {
+            echo '## Production rollback state'
+            echo
+            echo "- Previous production: `$CURRENT_VERSION@$CURRENT_DIGEST`"
+            echo "- Rollback target: `$TARGET_VERSION@$TARGET_DIGEST`"
+            echo "- Target smoke: `${SMOKE_OUTCOME:-not-run}`"
+            echo "- Alias promotion: `${PROMOTE_OUTCOME:-not-run}`"
+            echo '- Image build/publish: `not executed (immutable digest redeployed)`'
+          } >> "$GITHUB_STEP_SUMMARY"

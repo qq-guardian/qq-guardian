@@ -1,0 +1,312 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://qq-guardian.invalid/contracts/onebot-v11/action-request.schema.json",
+  "title": "Guardian OneBot v11 action request",
+  "definitions": {
+    "identifier": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 20,
+          "format": "onebot-uint64"
+        }
+      ]
+    },
+    "messageIdentifier": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": -1
+        },
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "string",
+          "maxLength": 20,
+          "format": "onebot-message-id"
+        }
+      ]
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "required": [
+    "action",
+    "params",
+    "echo"
+  ],
+  "properties": {
+    "action": {
+      "type": "string",
+      "minLength": 1
+    },
+    "params": {
+      "type": "object"
+    },
+    "echo": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "integer"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "action": {
+          "const": "get_login_info"
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "get_group_list"
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "get_group_member_info"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "group_id",
+            "user_id"
+          ],
+          "properties": {
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "user_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "no_cache": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "get_group_system_msg"
+        },
+        "params": {
+          "type": "object"
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "send_group_msg"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "group_id",
+            "message"
+          ],
+          "properties": {
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "message": {
+              "$ref": "#/definitions/message"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "send_private_msg"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "user_id",
+            "message"
+          ],
+          "properties": {
+            "user_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "message": {
+              "$ref": "#/definitions/message"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "delete_msg"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "message_id"
+          ],
+          "properties": {
+            "message_id": {
+              "$ref": "#/definitions/messageIdentifier"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "set_group_ban"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "group_id",
+            "user_id",
+            "duration"
+          ],
+          "properties": {
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "user_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "duration": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "set_group_kick"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "group_id",
+            "user_id"
+          ],
+          "properties": {
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "user_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "reject_add_request": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "set_group_whole_ban"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "group_id",
+            "enable"
+          ],
+          "properties": {
+            "group_id": {
+              "$ref": "#/definitions/identifier"
+            },
+            "enable": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    {
+      "properties": {
+        "action": {
+          "const": "set_group_add_request"
+        },
+        "params": {
+          "type": "object",
+          "required": [
+            "flag",
+            "sub_type",
+            "approve"
+          ],
+          "properties": {
+            "flag": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sub_type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approve": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

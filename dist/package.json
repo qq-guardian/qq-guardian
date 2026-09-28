@@ -1,0 +1,21 @@
+{
+  "name": "napcat-plugin-qq-guardian",
+  "plugin": "QQ Guardian",
+  "version": "1.4.2",
+  "type": "module",
+  "main": "index.mjs",
+  "description": "NapCat QQ group guardian plugin — group approvals, captcha, risk detection, blacklist, audit log, WebUI",
+  "author": "ShiYuPIay",
+  "license": "AGPL-3.0-or-later",
+  "icon": "plugin-icon.png",
+  "napcat": {
+    "tags": [
+      "群管理",
+      "安全",
+      "WebUI"
+    ],
+    "minVersion": "4.14.0",
+    "homepage": "https://github.com/ShiYuPIay/qq-guardian"
+  },
+  "homepage": "https://github.com/ShiYuPIay/qq-guardian"
+}
