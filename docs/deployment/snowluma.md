@@ -287,7 +287,7 @@ http://127.0.0.1:6099/plugin/napcat-plugin-qq-guardian/page/guardian
 
 原生 Windows 方式运行的是 Windows QQ.exe，不使用 Docker 或 WSL2。SnowLuma 与 QQ 必须使用**同一个 Windows 用户和相同的权限级别**运行；一个以管理员启动而另一个不是管理员，可能导致 hook 无法注入。
 
-1. 按 SnowLuma 的 [原生 Windows 教程](https://snowluma.github.io/en/docs/guide/deploy/windows) 安装 NTQQ，并从 SnowLuma Releases 下载与 Windows x64 对应的发布包。完整包自带 Node；轻量包需要 Node.js >=22。
+1. 按 SnowLuma 的 [原生 Windows 教程](https://snowluma.github.io/en/docs/guide/deploy/windows) 安装 NTQQ，并从 SnowLuma Releases 下载与 Windows x64 对应的发布包。完整包自带 Node；轻量包需要 Node.js >=22.13.0（23 系需要 23.4.0+）。
 2. 启动 QQ 和 SnowLuma，扫码登录 QQ，在 http://127.0.0.1:5099/ 登录 SnowLuma WebUI。
 3. 按本教程的 [配置 SnowLuma OneBot WebSocket](#配置-snowluma-onebot-websocket) 创建或确认 wsServers 的 Universal 条目和 token。
 4. 解压 qq-guardian-snowluma.zip 到固定的应用目录，例如 C:\QQGuardian\app。Guardian 独立服务需要系统 PATH 中的 Node.js >=22.6.0；不要假设 SnowLuma 打包的 Node 会自动提供给 Guardian。
