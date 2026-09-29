@@ -17,12 +17,18 @@
 
 SnowLuma 的当前平台要求和 QQ 兼容性以其官方文档为准：
 
-- [Docker 部署](https://snowluma.github.io/en/guide/deploy/docker.html)
-- [原生 Windows](https://snowluma.github.io/en/guide/deploy/windows.html)
-- [Windows Docker Desktop](https://snowluma.github.io/en/guide/deploy/windows-docker.html)
-- [WSL2](https://snowluma.github.io/en/guide/deploy/wsl2.html)
-- [原生 Linux 手动部署](https://snowluma.github.io/guide/deploy/linux-manual.html)
-- [Android / Termux](https://snowluma.github.io/en/guide/deploy/mobile.html)
+- [Docker 部署](https://snowluma.github.io/en/docs/guide/deploy/docker)
+- [原生 Windows](https://snowluma.github.io/en/docs/guide/deploy/windows)
+- [Windows Docker Desktop](https://snowluma.github.io/en/docs/guide/deploy/windows-docker)
+- [WSL2](https://snowluma.github.io/en/docs/guide/deploy/wsl2)
+- [原生 Linux 手动部署](https://snowluma.github.io/en/docs/guide/deploy/linux-manual)
+- [Android / Termux](https://snowluma.github.io/en/docs/guide/deploy/mobile)
+
+截至当前官方 SnowLuma v1.14.20：
+
+- 完整发行包（full）自带 Node.js 运行时，不需要另装 Node.js。
+- Lite 发行包不带 Node.js，需要 Node.js **22.13+**；23 系需要 **23.4+**。
+- Guardian 的自身开发运行时仍按本项目的 Node.js 要求执行；上面的版本要求仅针对 SnowLuma Lite 本身。
 
 ## 部署前先理解连接、端口和凭据
 
@@ -187,7 +193,7 @@ Guardian 默认使用 SnowLuma 的 **正向 WebSocket 服务端**，即 networks
 
 HTTP 和反向 WebSocket 监听默认只绑定 `127.0.0.1`。容器网络需要绑定 `0.0.0.0` 时，必须同时配置 `SNOWLUMA_ACCESS_TOKEN`，并且仅在受信任的内部网络开放对应端口。HTTP 模式不会在动作超时后通过另一传输重放有副作用的操作。
 
-在 SnowLuma WebUI 中打开当前 QQ 账号的 OneBot 配置，确认或新增一个 wsServers 条目。配置结构应遵循 SnowLuma 的 [OneBot 配置说明](https://snowluma.github.io/en/guide/configuration.html)，核心字段如下：
+在 SnowLuma WebUI 中打开当前 QQ 账号的 OneBot 配置，确认或新增一个 wsServers 条目。配置结构应遵循 SnowLuma 的 [OneBot 配置说明](https://snowluma.github.io/en/docs/guide/configuration)，核心字段如下：
 
 ```json
 {
@@ -281,7 +287,7 @@ http://127.0.0.1:6099/plugin/napcat-plugin-qq-guardian/page/guardian
 
 原生 Windows 方式运行的是 Windows QQ.exe，不使用 Docker 或 WSL2。SnowLuma 与 QQ 必须使用**同一个 Windows 用户和相同的权限级别**运行；一个以管理员启动而另一个不是管理员，可能导致 hook 无法注入。
 
-1. 按 SnowLuma 的 [原生 Windows 教程](https://snowluma.github.io/en/guide/deploy/windows.html) 安装 NTQQ，并从 SnowLuma Releases 下载与 Windows x64 对应的发布包。完整包自带 Node；轻量包需要 Node.js >=22。
+1. 按 SnowLuma 的 [原生 Windows 教程](https://snowluma.github.io/en/docs/guide/deploy/windows) 安装 NTQQ，并从 SnowLuma Releases 下载与 Windows x64 对应的发布包。完整包自带 Node；轻量包需要 Node.js >=22.13.0（23 系需要 23.4.0+）。
 2. 启动 QQ 和 SnowLuma，扫码登录 QQ，在 http://127.0.0.1:5099/ 登录 SnowLuma WebUI。
 3. 按本教程的 [配置 SnowLuma OneBot WebSocket](#配置-snowluma-onebot-websocket) 创建或确认 wsServers 的 Universal 条目和 token。
 4. 解压 qq-guardian-snowluma.zip 到固定的应用目录，例如 C:\QQGuardian\app。Guardian 独立服务需要系统 PATH 中的 Node.js >=22.6.0；不要假设 SnowLuma 打包的 Node 会自动提供给 Guardian。
@@ -353,7 +359,7 @@ WSL2 适合希望在 Windows 上使用 Linux 命令行与 Docker 的用户。
 
 Linux 上 SnowLuma 的 Docker 路线是官方推荐且正式支持的方式。原生手动部署适合无法使用 Docker 的进阶场景，需要自行维护 Linux QQ、无头桌面、VNC/noVNC、Node 的 ptrace capability、QQ 热更新策略以及服务守护。
 
-请先完整执行 SnowLuma 的[原生 Linux 手动教程](https://snowluma.github.io/guide/deploy/linux-manual.html)。其核心步骤是：安装 Node 24 或兼容运行时、安装 Linux QQ 与依赖、建立 Xvfb/fluxbox/noVNC 扫码环境、为实际 Node 二进制设置 cap_sys_ptrace、启动 SnowLuma 与 QQ，并从 WebUI 配置 OneBot。
+请先完整执行 SnowLuma 的[原生 Linux 手动教程](https://snowluma.github.io/en/docs/guide/deploy/linux-manual)。其核心步骤是：安装 Node 24 或兼容运行时、安装 Linux QQ 与依赖、建立 Xvfb/fluxbox/noVNC 扫码环境、为实际 Node 二进制设置 cap_sys_ptrace、启动 SnowLuma 与 QQ，并从 WebUI 配置 OneBot。
 
 SnowLuma 的 OneBot 正常工作后，部署 Guardian：
 
@@ -395,7 +401,7 @@ Android 路线是实验性的。SnowLuma 官方明确指出：proot 环境不具
    proot-distro login ubuntu
    ```
 
-3. 在该 Ubuntu 用户空间内按 SnowLuma 的[手机/原生 Linux 教程](https://snowluma.github.io/en/guide/deploy/mobile.html)完成 Node、Linux QQ、Xvfb/noVNC、SnowLuma lite 和扫码配置。
+3. 在该 Ubuntu 用户空间内按 SnowLuma 的[手机/原生 Linux 教程](https://snowluma.github.io/en/docs/guide/deploy/mobile)完成 Node、Linux QQ、Xvfb/noVNC、SnowLuma lite 和扫码配置。
 4. 在同一个用户空间内解压 Guardian 发布包，创建持久的实际绝对路径，并在 Guardian 环境文件中写入这些路径。`deploy/native/start-guardian.sh` 将环境文件按字面 KEY=value 读取，不能在值中依赖 `$HOME` 展开。
 5. 使用启动器运行：
 
@@ -499,7 +505,7 @@ const bot = new SnowLumaWebSocketClient({
 
 项目中的 native transport 与 SDK fallback 采用相同的有界重连策略，且不会因 WebSocket 超时而自动重放有副作用的操作。若需排查备用路径，可在 Guardian 的实际启动环境中设置 `SNOWLUMA_SDK_FALLBACK=off` 并重启；正常部署不需要手动设置该变量。
 
-文档主页：https://snowluma.github.io/sdk/index.html
+文档主页：https://snowluma.github.io/en/docs/sdk
 
 | 变量 | 说明 |
 | --- | --- |
@@ -662,9 +668,9 @@ docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml 
 
 ## 参考资料
 
-- [SnowLuma 快速开始与环境选择](https://snowluma.github.io/en/guide/quickstart.html)
-- [SnowLuma Docker 部署与持久卷说明](https://snowluma.github.io/en/guide/deploy/docker.html)
-- [SnowLuma OneBot 网络配置](https://snowluma.github.io/en/guide/configuration.html)
-- [SnowLuma SDK](https://snowluma.github.io/sdk/index.html)
+- [SnowLuma 快速开始与环境选择](https://snowluma.github.io/en/docs/guide/quickstart)
+- [SnowLuma Docker 部署与持久卷说明](https://snowluma.github.io/en/docs/guide/deploy/docker)
+- [SnowLuma OneBot 网络配置](https://snowluma.github.io/en/docs/guide/configuration)
+- [SnowLuma SDK](https://snowluma.github.io/en/docs/sdk)
 - [QQ Guardian 迁移与恢复说明](../architecture/migration.md)
 - [QQ Guardian 超级管理员保护与受控恢复](../security/super-admin-recovery.md)
