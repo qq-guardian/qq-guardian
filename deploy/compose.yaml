@@ -36,8 +36,8 @@ services:
       SNOWLUMA_LOG_LEVEL: ${SNOWLUMA_LOG_LEVEL:-info}
       SNOWLUMA_SCREEN: ${SNOWLUMA_SCREEN:-1920x1080x24}
       SNOWLUMA_HOOK_AUTOLOAD: ${SNOWLUMA_HOOK_AUTOLOAD:-1}
-      SNOWLUMA_EXTRA_QQ_HOMES: ${SNOWLUMA_EXTRA_QQ_HOMES:-}
-      SNOWLUMA_QQ_FLAGS: ${SNOWLUMA_QQ_FLAGS:---disable-gpu --disable-software-rasterizer --disable-gpu-compositing}
+      SNOWLUMA_EXTRA_QQ_HOMES: "${SNOWLUMA_EXTRA_QQ_HOMES:-}"
+      SNOWLUMA_QQ_FLAGS: "${SNOWLUMA_QQ_FLAGS:---disable-gpu --disable-software-rasterizer --disable-gpu-compositing}"
     # noVNC and SnowLuma's own WebUI are loopback-published for first-time QQ
     # login and local administration. OneBot stays private to the sidecar.
     ports:
