@@ -175,8 +175,12 @@ an unexpected dependency tree, or a checksum mismatch.
 ## GitHub environments and immutable rollback
 
 The deployment workflow references protected environments named `staging` and
-`production`. Apply the repository's checked-in policy only with an administrator
-token, after the workflow branches are merged:
+`production`. The checked-in policy intentionally makes promotion automatic:
+neither environment requires a human reviewer, and production starts only after
+the staging job succeeds. Protected-branch restrictions remain enabled.
+
+Apply the repository's checked-in policy only with an administrator token, after
+the workflow branches are merged:
 
 ```sh
 PRODUCTION_REVIEWER_IDS='[{"type":"User","id":123456}]' \
