@@ -1,0 +1,52 @@
+name: Recover v1.4.4 deployment
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions: {}
+
+concurrency:
+  group: recover-v1-4-4
+  cancel-in-progress: false
+
+jobs:
+  redeploy:
+    name: redeploy-v1-4.4
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      contains(github.event.workflow_run.head_commit.message, 'chore(ci): recover v1.4.4 deployment')
+    permissions:
+      attestations: write
+      contents: write
+      deployments: write
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: v1.4.4
+      source_sha: 083c31305bfbabc15eabd5f3131fe1117eede810
+    secrets: inherit
+
+  cleanup:
+    name: remove-recovery-workflow
+    needs: redeploy
+    if: needs.redeploy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Remove one-time recovery workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PATH_TO_DELETE: .github/workflows/recover-v1-4-4-deployment.yml
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$REPO/contents/$PATH_TO_DELETE?ref=main" --jq .sha)"
+          gh api --method DELETE "repos/$REPO/contents/$PATH_TO_DELETE"             -f message="chore(ci): remove one-time v1.4.4 recovery workflow"             -f sha="$sha"             -f branch=main
