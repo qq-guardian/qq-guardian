@@ -92,26 +92,34 @@ describe('immutable deployment control plane', () => {
 
     for (const name of ['staging', 'production']) {
       assert.doesNotThrow(() => assertEnvironment(name, {
-        wait_timer: 0,
-        prevent_self_review: false,
         deployment_branch_policy: { protected_branches: true },
-        protection_rules: [],
+        protection_rules: [{ type: 'wait_timer', wait_timer: 0 }],
       }, config.environments[name]));
     }
 
     assert.throws(() => assertEnvironment('production', {
-      wait_timer: 0,
-      prevent_self_review: false,
       deployment_branch_policy: { protected_branches: true },
-      protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', id: 123 }] }],
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', id: 123 }] },
+      ],
     }, config.environments.production), /must not have required environment reviewers/);
 
-    assert.throws(() => assertEnvironment('production', {
-      wait_timer: 0,
-      prevent_self_review: true,
+    const manualPolicy = { ...config.environments.production, requiredReviewers: true, preventSelfReview: true };
+    assert.doesNotThrow(() => assertEnvironment('production', {
       deployment_branch_policy: { protected_branches: true },
-      protection_rules: [],
-    }, config.environments.production), /prevent-self-review drift/);
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', id: 123 }] },
+      ],
+    }, manualPolicy));
+    assert.throws(() => assertEnvironment('production', {
+      deployment_branch_policy: { protected_branches: true },
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', id: 123 }] },
+      ],
+    }, manualPolicy), /prevent-self-review drift/);
   });
 
   it('requires staging to complete before production smoke and promotion', () => {
