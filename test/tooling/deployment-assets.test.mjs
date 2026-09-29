@@ -70,9 +70,9 @@ describe('deployment assets', () => {
   });
 
   it('allows the one-time recovery workflow to retry from later main CI descendants', () => {
-    assert.match(recoveryWorkflow, /RECOVERY_MERGE_SHA: a55f808e3b1b134152646fe3ddc535afd4838209/);
-    assert.match(recoveryWorkflow, /repos\\/\\$REPO\\/compare\\/\\$RECOVERY_MERGE_SHA\\.\\.\\.\\$HEAD_SHA/);
-    assert.match(recoveryWorkflow, /identical\\|ahead/);
+    assert.equal(recoveryWorkflow.includes('RECOVERY_MERGE_SHA: a55f808e3b1b134152646fe3ddc535afd4838209'), true);
+    assert.equal(recoveryWorkflow.includes('gh api "repos/$REPO/compare/$RECOVERY_MERGE_SHA...$HEAD_SHA" --jq .status'), true);
+    assert.equal(recoveryWorkflow.includes('identical|ahead'), true);
   });
 
   it('starts the standalone entry point that is actually packaged in the Linux release', () => {
