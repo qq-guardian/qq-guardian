@@ -59,7 +59,7 @@ SnowLuma
 
 ## 获取并校验 Guardian SnowLuma 发布包
 
-1. 打开 [QQ Guardian Releases](https://github.com/ShiYuPIay/napcat-plugin-qq-guardian/releases/latest)。
+1. 打开 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest)。
 2. 下载 qq-guardian-snowluma.zip 与同名的 .sha256 文件。
 3. 在解压前校验 SHA-256。校验失败时删除下载文件并重新下载，不要继续部署。
 
