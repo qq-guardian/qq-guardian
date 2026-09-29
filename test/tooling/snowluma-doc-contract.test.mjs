@@ -33,4 +33,5 @@ test('SnowLuma deployment guide tracks current official documentation routes', (
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/configuration.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/sdk/index.html'), false);
   assert.match(guide, /Node\.js \*\*22\.13\+\*\*/);
+  assert.ok(guide.includes('Node.js >=22.13.0（23 系需要 23.4.0+）'));
 });
