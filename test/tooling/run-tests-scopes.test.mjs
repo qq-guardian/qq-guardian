@@ -18,7 +18,7 @@ function listScope(scope) {
     .trim()
     .split(/\r?\n/)
     .filter(Boolean)
-    .map((file) => file.replaceAll('\\\\', '/'))
+    .map((file) => file.replaceAll('\\', '/'))
     .sort();
 }
 
