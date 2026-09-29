@@ -21,7 +21,7 @@ SnowLuma 的当前平台要求和 QQ 兼容性以其官方文档为准：
 - [原生 Windows](https://snowluma.github.io/en/docs/guide/deploy/windows)
 - [Windows Docker Desktop](https://snowluma.github.io/en/docs/guide/deploy/windows-docker)
 - [WSL2](https://snowluma.github.io/en/docs/guide/deploy/wsl2)
-- [原生 Linux 手动部署](https://snowluma.github.io/guide/deploy/linux-manual.html)
+- [原生 Linux 手动部署](https://snowluma.github.io/en/docs/guide/deploy/linux-manual)
 - [Android / Termux](https://snowluma.github.io/en/docs/guide/deploy/mobile)
 
 截至当前官方 SnowLuma v1.14.20：
@@ -359,7 +359,7 @@ WSL2 适合希望在 Windows 上使用 Linux 命令行与 Docker 的用户。
 
 Linux 上 SnowLuma 的 Docker 路线是官方推荐且正式支持的方式。原生手动部署适合无法使用 Docker 的进阶场景，需要自行维护 Linux QQ、无头桌面、VNC/noVNC、Node 的 ptrace capability、QQ 热更新策略以及服务守护。
 
-请先完整执行 SnowLuma 的[原生 Linux 手动教程](https://snowluma.github.io/guide/deploy/linux-manual.html)。其核心步骤是：安装 Node 24 或兼容运行时、安装 Linux QQ 与依赖、建立 Xvfb/fluxbox/noVNC 扫码环境、为实际 Node 二进制设置 cap_sys_ptrace、启动 SnowLuma 与 QQ，并从 WebUI 配置 OneBot。
+请先完整执行 SnowLuma 的[原生 Linux 手动教程](https://snowluma.github.io/en/docs/guide/deploy/linux-manual)。其核心步骤是：安装 Node 24 或兼容运行时、安装 Linux QQ 与依赖、建立 Xvfb/fluxbox/noVNC 扫码环境、为实际 Node 二进制设置 cap_sys_ptrace、启动 SnowLuma 与 QQ，并从 WebUI 配置 OneBot。
 
 SnowLuma 的 OneBot 正常工作后，部署 Guardian：
 
