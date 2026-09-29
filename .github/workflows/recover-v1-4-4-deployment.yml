@@ -1,0 +1,89 @@
+name: Recover v1.4.4 deployment
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions: {}
+
+concurrency:
+  group: recover-v1-4-4
+  cancel-in-progress: false
+
+jobs:
+  resolve-recovery:
+    name: verify-v1.4.4-recovery-merge
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.verify.outputs.should_deploy }}
+    permissions:
+      contents: read
+    steps:
+      - name: Verify CI completed for this recovery PR's merge commit
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RECOVERY_BRANCH: chore/recover-v1-4-4-promotion-v2
+        run: |
+          set -euo pipefail
+
+          should_deploy=false
+          matches="$(gh api "repos/$REPO/pulls?state=closed&head=$REPO_OWNER:$RECOVERY_BRANCH&per_page=20" |
+            jq -r --arg sha "$HEAD_SHA" '
+              .[]
+              | select(.merged_at != null and .merge_commit_sha == $sha)
+              | .number
+            ' | head -n 1)"
+
+          if [[ -n "$matches" ]]; then
+            should_deploy=true
+            echo "Recovery PR #$matches merged as CI head SHA $HEAD_SHA."
+          else
+            echo "This CI run is not the recovery PR merge commit; no deployment will run."
+            echo "CI head SHA: $HEAD_SHA"
+          fi
+
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+
+  redeploy:
+    name: redeploy-v1-4.4
+    needs: resolve-recovery
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      needs.resolve-recovery.outputs.should_deploy == 'true'
+    permissions:
+      attestations: write
+      contents: write
+      deployments: write
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      tag: v1.4.4
+      source_sha: 083c31305bfbabc15eabd5f3131fe1117eede810
+    secrets: inherit
+
+  cleanup:
+    name: remove-recovery-workflow
+    needs: redeploy
+    if: needs.redeploy.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Remove one-time recovery workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PATH_TO_DELETE: .github/workflows/recover-v1-4-4-deployment.yml
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$REPO/contents/$PATH_TO_DELETE?ref=main" --jq .sha)"
+          gh api --method DELETE "repos/$REPO/contents/$PATH_TO_DELETE"             -f message="chore(ci): remove one-time v1.4.4 recovery workflow"             -f sha="$sha"             -f branch=main
