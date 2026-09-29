@@ -14,12 +14,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-recovery-merge:
+    name: verify-v1.4.4-recovery-merge
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.verify.outputs.should_deploy }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Verify CI completed for the actual PR #8 merge commit
+        id: verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          should_deploy=false
+          read -r merged_at merge_sha < <(
+            gh api "repos/$REPO/pulls/8" --jq '[.merged_at, .merge_commit_sha] | @tsv'
+          )
+
+          if [[ "$merged_at" != "null" && "$merge_sha" == "$HEAD_SHA" ]]; then
+            should_deploy=true
+            echo "PR #8 is merged and its merge commit matches the completed CI SHA: $HEAD_SHA"
+          else
+            echo "This CI run is not the PR #8 merge commit; no recovery deployment will run."
+            echo "CI head SHA: $HEAD_SHA"
+            echo "PR #8 merged_at: $merged_at"
+            echo "PR #8 merge_commit_sha: $merge_sha"
+          fi
+
+          echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
+
   redeploy:
     name: redeploy-v1-4.4
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      contains(github.event.workflow_run.head_commit.message, 'chore(ci): recover v1.4.4 deployment')
+    needs: verify-recovery-merge
+    if: needs.verify-recovery-merge.outputs.should_deploy == 'true'
     permissions:
       attestations: write
       contents: write
