@@ -51,10 +51,12 @@ the previous attempt.
 
 ## Configure GitHub environments
 
-The workflow uses GitHub environments named `staging` and `production`. Apply
-the checked-in policy with an administrator token after the deployment workflow
-is merged. The production reviewer IDs must be supplied explicitly; no reviewer
-or credential is stored in this repository.
+The workflow uses GitHub environments named `staging` and `production`. The
+checked-in policy makes both environments non-interactive: no required reviewer
+is needed, while both environments remain restricted to protected branches.
+
+Apply the checked-in policy with an administrator token after the deployment
+workflow is merged.
 
 ```sh
 GH_TOKEN=*** \
