@@ -20,7 +20,7 @@ export async function main() {
   if (!['verify', 'apply'].includes(command)) usage();
   const repository = option('--repo') ?? process.env.GITHUB_REPOSITORY;
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  if (!repository || !/^[^/]+\\/[^/]+$/.test(repository)) throw new Error('--repo=OWNER/REPOSITORY or GITHUB_REPOSITORY is required');
+  if (!repository || !/^[^/]+\/[^/]+$/.test(repository)) throw new Error('--repo=OWNER/REPOSITORY or GITHUB_REPOSITORY is required');
   if (!token) throw new Error('GH_TOKEN is required');
   const client = createClient(repository, token);
   if (command === 'apply') {
