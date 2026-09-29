@@ -32,5 +32,5 @@ test('SnowLuma deployment guide tracks current official documentation routes', (
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/quickstart.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/configuration.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/sdk/index.html'), false);
-  assert.match(guide, /Node.js **22.13++**/);
+  assert.match(guide, /Node\.js \*\*22\.13\+\*\*/);
 });
