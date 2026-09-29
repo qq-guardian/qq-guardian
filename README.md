@@ -38,7 +38,7 @@ logic; choose the provider that matches the host you already operate.
 
 ### 安装
 
-1. 从 [Releases](https://github.com/ShiYuPIay/qq-guardian/releases/latest) 下载 `napcat-plugin-qq-guardian.zip`。
+1. 从 [Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 下载 `napcat-plugin-qq-guardian.zip`。
 2. 在 NapCat 插件目录创建 `napcat-plugin-qq-guardian` 文件夹，并把 ZIP 内容解压到该文件夹。
 3. 在 NapCat 的插件管理界面启用 QQ Guardian，然后按 NapCat 的方式重载或重启。
 
