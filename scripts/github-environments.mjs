@@ -63,20 +63,23 @@ export function assertEnvironment(name, value, policy) {
   if (!value || value.deployment_branch_policy?.protected_branches !== policy.protectedBranches) {
     throw new Error(`${name} must restrict deployments to protected branches`);
   }
-  if (value.wait_timer !== policy.waitTimer) {
-    throw new Error(`${name} wait timer drift: expected ${policy.waitTimer}, got ${value.wait_timer}`);
-  }
-  if (value.prevent_self_review !== policy.preventSelfReview) {
-    throw new Error(`${name} prevent-self-review drift: expected ${policy.preventSelfReview}, got ${value.prevent_self_review}`);
+  const rules = Array.isArray(value.protection_rules) ? value.protection_rules : [];
+  const waitTimer = rules.find((rule) => rule.type === 'wait_timer');
+  const required = rules.find((rule) => rule.type === 'required_reviewers');
+  const actualWaitTimer = Number.isInteger(waitTimer?.wait_timer) ? waitTimer.wait_timer : 0;
+  if (actualWaitTimer !== policy.waitTimer) {
+    throw new Error(`${name} wait timer drift: expected ${policy.waitTimer}, got ${actualWaitTimer}`);
   }
 
-  const required = value.protection_rules?.find((rule) => rule.type === 'required_reviewers');
   const reviewerCount = Array.isArray(required?.reviewers) ? required.reviewers.length : 0;
   if (policy.requiredReviewers) {
     if (reviewerCount === 0) {
       throw new Error(`${name} must have at least one required environment reviewer`);
     }
-  } else if (reviewerCount > 0) {
+    if (required.prevent_self_review !== policy.preventSelfReview) {
+      throw new Error(`${name} prevent-self-review drift: expected ${policy.preventSelfReview}, got ${required.prevent_self_review}`);
+    }
+  } else if (required) {
     throw new Error(`${name} must not have required environment reviewers`);
   }
 }
