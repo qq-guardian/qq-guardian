@@ -77,7 +77,8 @@ rather than silently accepted.
 After release identity verification, the reusable deployment workflow verifies
 the attested `releaseDownload.zip`, builds or safely resumes the one versioned
 GHCR image, records its digest, runs the staging provider/container smoke matrix,
-and pauses at the production environment gate. Production repeats the smoke
+and automatically starts production after staging succeeds; there is no human
+approval click. Production repeats the smoke
 against that exact digest and records the previous version/digest, result,
 timestamps, and smoke checks.
 
