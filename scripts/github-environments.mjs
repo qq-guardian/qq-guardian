@@ -20,17 +20,19 @@ export async function main() {
   if (!['verify', 'apply'].includes(command)) usage();
   const repository = option('--repo') ?? process.env.GITHUB_REPOSITORY;
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
-  if (!repository || !/^[^/]+\/[^/]+$/.test(repository)) throw new Error('--repo=OWNER/REPOSITORY or GITHUB_REPOSITORY is required');
+  if (!repository || !/^[^/]+\\/[^/]+$/.test(repository)) throw new Error('--repo=OWNER/REPOSITORY or GITHUB_REPOSITORY is required');
   if (!token) throw new Error('GH_TOKEN is required');
   const client = createClient(repository, token);
   if (command === 'apply') {
     if (!process.argv.includes('--confirm')) throw new Error('Applying environment policy requires --confirm');
-    const reviewers = parseReviewers(process.env.PRODUCTION_REVIEWER_IDS);
-    if (reviewers.length === 0) {
+    const gatedEnvironments = Object.entries(CONFIG.environments).filter(([, policy]) => policy.requiredReviewers);
+    const reviewers = gatedEnvironments.length > 0 ? parseReviewers(process.env.PRODUCTION_REVIEWER_IDS) : [];
+    if (gatedEnvironments.length > 0 && reviewers.length === 0) {
       throw new Error('PRODUCTION_REVIEWER_IDS must be a JSON array of GitHub reviewer objects, for example [{"type":"User","id":123}]');
     }
-    await applyEnvironment(client, 'staging', CONFIG.environments.staging, []);
-    await applyEnvironment(client, 'production', CONFIG.environments.production, reviewers);
+    for (const [name, policy] of Object.entries(CONFIG.environments)) {
+      await applyEnvironment(client, name, policy, policy.requiredReviewers ? reviewers : []);
+    }
   }
   const states = {};
   for (const [name, policy] of Object.entries(CONFIG.environments)) {
@@ -61,11 +63,24 @@ export function assertEnvironment(name, value, policy) {
   if (!value || value.deployment_branch_policy?.protected_branches !== policy.protectedBranches) {
     throw new Error(`${name} must restrict deployments to protected branches`);
   }
-  if (name === 'production') {
-    const required = value.protection_rules?.find((rule) => rule.type === 'required_reviewers');
-    if (!required || !Array.isArray(required.reviewers) || required.reviewers.length === 0) {
-      throw new Error('production must have at least one required environment reviewer');
+  const rules = Array.isArray(value.protection_rules) ? value.protection_rules : [];
+  const waitTimer = rules.find((rule) => rule.type === 'wait_timer');
+  const required = rules.find((rule) => rule.type === 'required_reviewers');
+  const actualWaitTimer = Number.isInteger(waitTimer?.wait_timer) ? waitTimer.wait_timer : 0;
+  if (actualWaitTimer !== policy.waitTimer) {
+    throw new Error(`${name} wait timer drift: expected ${policy.waitTimer}, got ${actualWaitTimer}`);
+  }
+
+  const reviewerCount = Array.isArray(required?.reviewers) ? required.reviewers.length : 0;
+  if (policy.requiredReviewers) {
+    if (reviewerCount === 0) {
+      throw new Error(`${name} must have at least one required environment reviewer`);
     }
+    if (required.prevent_self_review !== policy.preventSelfReview) {
+      throw new Error(`${name} prevent-self-review drift: expected ${policy.preventSelfReview}, got ${required.prevent_self_review}`);
+    }
+  } else if (required) {
+    throw new Error(`${name} must not have required environment reviewers`);
   }
 }
 

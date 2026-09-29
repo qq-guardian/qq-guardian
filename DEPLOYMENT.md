@@ -119,7 +119,7 @@ flowchart TD
   I --> J[GitHub Release\nreleaseDownload.zip = full Windows bundle]
   J --> K[Build one GHCR image\ntag vX.Y.Z, record digest]
   K --> L[staging environment\nexact digest smoke]
-  L --> M[production environment gate\nexact same digest smoke]
+  L --> M[production environment\nautomatic promotion boundary]
   M --> N[Promote production alias\nattach deployment record]
   L -. failure .-> O[Stop before production]
   M -. failure .-> P[Restore previous alias\nrecord failure]
@@ -175,19 +175,25 @@ an unexpected dependency tree, or a checksum mismatch.
 ## GitHub environments and immutable rollback
 
 The deployment workflow references protected environments named `staging` and
-`production`. Apply the repository's checked-in policy only with an administrator
-token, after the workflow branches are merged:
+`production`. The checked-in policy intentionally makes promotion automatic:
+neither environment requires a human reviewer, and production starts only after
+the staging job succeeds. Protected-branch restrictions remain enabled.
+
+Apply the repository's checked-in policy only with an administrator token, after
+the workflow branches are merged:
 
 ```sh
-PRODUCTION_REVIEWER_IDS='[{"type":"User","id":123456}]' \
-  GH_TOKEN="$GH_TOKEN" pnpm run environments:apply
-GH_TOKEN="$GH_TOKEN" pnpm run environments:verify
+GH_TOKEN="$GH_TOKEN" pnpm run environments:apply -- --repo=qq-guardian/qq-guardian --confirm
+GH_TOKEN="$GH_TOKEN" pnpm run environments:verify -- --repo=qq-guardian/qq-guardian
 ```
 
-Replace the reviewer ID with the real, approved GitHub user or team; never
-commit a token or reviewer credential. Production must require at least one
-reviewer and both environments must enforce the intended protected branch and
-status-check policy. The exact REST payload and validation are in
+No `PRODUCTION_REVIEWER_IDS` value is required for the automatic policy. The
+verifier fails if required reviewers are later added out-of-band, or if the wait
+timer, self-review setting, or protected-branch policy drifts. To restore a
+manual production gate intentionally, set `production.requiredReviewers` to
+`true` and provide `PRODUCTION_REVIEWER_IDS` before applying the policy.
+
+The exact REST payload and validation are in
 [`config/ci-environments.json`](config/ci-environments.json) and
 [`scripts/github-environments.mjs`](scripts/github-environments.mjs).
 

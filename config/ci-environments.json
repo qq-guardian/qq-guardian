@@ -9,9 +9,9 @@
     },
     "production": {
       "waitTimer": 0,
-      "preventSelfReview": true,
+      "preventSelfReview": false,
       "protectedBranches": true,
-      "requiredReviewers": true
+      "requiredReviewers": false
     }
   }
 }

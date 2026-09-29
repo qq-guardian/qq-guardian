@@ -75,19 +75,65 @@ describe('immutable deployment control plane', () => {
     assert.match(rollback, /imagetools create --tag "\$IMAGE:production" "\$IMAGE@\$PREVIOUS_DIGEST"/);
   });
 
-  it('requires protected branches and an explicit production reviewer policy', () => {
-    assert.doesNotThrow(() => assertEnvironment('staging', {
-      deployment_branch_policy: { protected_branches: true },
-      protection_rules: [],
-    }, { protectedBranches: true }));
-    assert.doesNotThrow(() => assertEnvironment('production', {
-      deployment_branch_policy: { protected_branches: true },
-      protection_rules: [{ type: 'required_reviewers', reviewers: [{ type: 'User', id: 123 }] }],
-    }, { protectedBranches: true }));
+  it('enforces the checked-in automatic environment policy and rejects reviewer drift', () => {
+    const config = JSON.parse(readFileSync(join(root, 'config/ci-environments.json'), 'utf8'));
+    assert.deepEqual(config.environments.staging, {
+      waitTimer: 0,
+      preventSelfReview: false,
+      protectedBranches: true,
+      requiredReviewers: false,
+    });
+    assert.deepEqual(config.environments.production, {
+      waitTimer: 0,
+      preventSelfReview: false,
+      protectedBranches: true,
+      requiredReviewers: false,
+    });
+
+    for (const name of ['staging', 'production']) {
+      assert.doesNotThrow(() => assertEnvironment(name, {
+        deployment_branch_policy: { protected_branches: true },
+        protection_rules: [{ type: 'wait_timer', wait_timer: 0 }],
+      }, config.environments[name]));
+    }
+
     assert.throws(() => assertEnvironment('production', {
       deployment_branch_policy: { protected_branches: true },
-      protection_rules: [],
-    }, { protectedBranches: true }), /required environment reviewer/);
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', id: 123 }] },
+      ],
+    }, config.environments.production), /must not have required environment reviewers/);
+
+    const manualPolicy = { ...config.environments.production, requiredReviewers: true, preventSelfReview: true };
+    assert.doesNotThrow(() => assertEnvironment('production', {
+      deployment_branch_policy: { protected_branches: true },
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: true, reviewers: [{ type: 'User', id: 123 }] },
+      ],
+    }, manualPolicy));
+    assert.throws(() => assertEnvironment('production', {
+      deployment_branch_policy: { protected_branches: true },
+      protection_rules: [
+        { type: 'wait_timer', wait_timer: 0 },
+        { type: 'required_reviewers', prevent_self_review: false, reviewers: [{ type: 'User', id: 123 }] },
+      ],
+    }, manualPolicy), /prevent-self-review drift/);
+  });
+
+  it('requires staging to complete before production smoke and promotion', () => {
+    const stagingIndex = deploy.indexOf('staging:');
+    const productionIndex = deploy.indexOf('production:');
+    const productionNeeds = deploy.slice(productionIndex, productionIndex + 1200);
+    const productionBody = deploy.slice(productionIndex);
+
+    assert.ok(stagingIndex >= 0);
+    assert.ok(productionIndex > stagingIndex);
+    assert.match(productionNeeds, /needs:\s*\[metadata, publish-image, staging\]/);
+    assert.match(productionBody, /Smoke the exact staged digest before promotion/);
+    assert.match(productionBody, /imagetools create --tag "\$IMAGE:production" "\$IMAGE@\$DIGEST"/);
+    assert.ok(productionBody.indexOf('Smoke the exact staged digest before promotion') < productionBody.indexOf('imagetools create --tag "$IMAGE:production" "$IMAGE@$DIGEST"'));
   });
 
   it('pins every third-party action in release deployment workflows', () => {
