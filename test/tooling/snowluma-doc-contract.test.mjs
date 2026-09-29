@@ -28,7 +28,7 @@ test('SnowLuma deployment guide tracks current official documentation routes', (
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/deploy/windows-docker.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/deploy/wsl2.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/deploy/mobile.html'), false);
-  assert.equal(guide.includes('https://snowluma.github.io/en/guide/deploy/linux-manual.html'), false);
+  assert.equal(guide.includes('https://snowluma.github.io/guide/deploy/linux-manual.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/quickstart.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/en/guide/configuration.html'), false);
   assert.equal(guide.includes('https://snowluma.github.io/sdk/index.html'), false);
