@@ -119,7 +119,7 @@ flowchart TD
   I --> J[GitHub Release\nreleaseDownload.zip = full Windows bundle]
   J --> K[Build one GHCR image\ntag vX.Y.Z, record digest]
   K --> L[staging environment\nexact digest smoke]
-  L --> M[production environment gate\nexact same digest smoke]
+  L --> M[production environment\nautomatic promotion boundary]
   M --> N[Promote production alias\nattach deployment record]
   L -. failure .-> O[Stop before production]
   M -. failure .-> P[Restore previous alias\nrecord failure]
