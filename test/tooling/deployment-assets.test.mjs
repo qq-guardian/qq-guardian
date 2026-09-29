@@ -25,6 +25,26 @@ describe('deployment assets', () => {
     assert.match(dockerignore, /^deploy\/compose\.local\.yaml$/m);
   });
 
+  it('keeps the SnowLuma Docker runtime contract aligned with the official image', () => {
+    assert.match(compose, /^    shm_size: \$\{SNOWLUMA_SHM_SIZE:-1gb\}$/m);
+    assert.match(compose, /^    ulimits:\r?\n      nofile:\r?\n        soft: 65536\r?\n        hard: 1048576$/m);
+    assert.match(compose, /^    cap_add:\r?\n      - SYS_PTRACE$/m);
+    assert.match(compose, /^      - seccomp=unconfined$/m);
+    assert.match(compose, /^      VNC_PASSWD: \$\{VNC_PASSWD:-\}$/m);
+    assert.match(compose, /^      SNOWLUMA_ONEBOT_HOST: 0\.0\.0\.0$/m);
+    assert.match(compose, /^      SNOWLUMA_WEBUI_HOST: 0\.0\.0\.0$/m);
+    assert.match(compose, /^      SNOWLUMA_WEBUI_PORT: 5099$/m);
+    assert.match(compose, /^      SNOWLUMA_EXTRA_QQ_HOMES: "\$\{SNOWLUMA_EXTRA_QQ_HOMES:-\}"$/m);
+    assert.match(compose, /^      SNOWLUMA_QQ_FLAGS: "\$\{SNOWLUMA_QQ_FLAGS:---disable-gpu --disable-software-rasterizer --disable-gpu-compositing\}"$/m);
+  });
+
+  it('keeps Guardian and its HTTPS overlay behind the same Compose profile', () => {
+    assert.match(compose, /^  guardian-storage-init:\r?\n    profiles:\r?\n      - guardian$/m);
+    assert.match(compose, /^  guardian:\r?\n    profiles:\r?\n      - guardian$/m);
+    const httpsOverlay = readFileSync(join(root, 'deploy', 'compose.https.yaml'), 'utf8');
+    assert.match(httpsOverlay, /^  guardian-https:\r?\n    profiles:\r?\n      - guardian$/m);
+  });
+
   it('passes the documented SDK fallback mode into the Guardian container', () => {
     assert.match(compose, /^      SNOWLUMA_SDK_FALLBACK: \$\{SNOWLUMA_SDK_FALLBACK:-auto\}$/m);
   });
