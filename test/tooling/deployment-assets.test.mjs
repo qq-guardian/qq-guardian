@@ -62,11 +62,11 @@ describe('deployment assets', () => {
   });
 
   it('builds the release image from an explicit minimal context that includes dist-snowluma', () => {
-    assert.match(deployWorkflow, /Prepare minimal Guardian image build context/);
-    assert.match(deployWorkflow, /test -f "\\$BUNDLE_PATH\\/dist-snowluma\\/index\\.mjs"/);
-    assert.match(deployWorkflow, /cp -a "\\$BUNDLE_PATH\\/dist-snowluma" "\\$context_dir\\/dist-snowluma"/);
-    assert.match(deployWorkflow, /context: \\$\\{\\{ steps\\.image-context\\.outputs\\.path \\}\\}/);
-    assert.match(deployWorkflow, /file: \\$\\{\\{ steps\\.image-context\\.outputs\\.path \\}\\}\\/Dockerfile/);
+    assert.equal(deployWorkflow.includes('Prepare minimal Guardian image build context'), true);
+    assert.equal(deployWorkflow.includes('test -f "$BUNDLE_PATH/dist-snowluma/index.mjs"'), true);
+    assert.equal(deployWorkflow.includes('cp -a "$BUNDLE_PATH/dist-snowluma" "$context_dir/dist-snowluma"'), true);
+    assert.equal(deployWorkflow.includes('context: ${{ steps.image-context.outputs.path }}'), true);
+    assert.equal(deployWorkflow.includes('file: ${{ steps.image-context.outputs.path }}/Dockerfile'), true);
   });
 
   it('allows the one-time recovery workflow to retry from later main CI descendants', () => {
