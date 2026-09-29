@@ -130,10 +130,12 @@ describe('immutable deployment control plane', () => {
 
     assert.ok(stagingIndex >= 0);
     assert.ok(productionIndex > stagingIndex);
-    assert.match(productionNeeds, /needs:\s*\[metadata, publish-image, staging\]/);
-    assert.match(productionBody, /Smoke the exact staged digest before promotion/);
+    const needsBlock = productionNeeds.match(/needs:\s*(\[[^\]]*\]|(?:\n\s*-\s*\w[\w-]*)+)/)?.[1] ?? '';
+    const needs = [...needsBlock.matchAll(/\w[\w-]*/g)].map((match) => match[0]).sort();
+    assert.deepEqual(needs, ['metadata', 'publish-image', 'staging']);
+    assert.match(productionBody, /Run production smoke against the staged digest/);
     assert.match(productionBody, /imagetools create --tag "\$IMAGE:production" "\$IMAGE@\$DIGEST"/);
-    assert.ok(productionBody.indexOf('Smoke the exact staged digest before promotion') < productionBody.indexOf('imagetools create --tag "$IMAGE:production" "$IMAGE@$DIGEST"'));
+    assert.ok(productionBody.indexOf('Run production smoke against the staged digest') < productionBody.indexOf('imagetools create --tag "$IMAGE:production" "$IMAGE@$DIGEST"'));
   });
 
   it('pins every third-party action in release deployment workflows', () => {
