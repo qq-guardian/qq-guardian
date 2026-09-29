@@ -12,6 +12,10 @@ services:
     image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:latest}
     restart: unless-stopped
     shm_size: ${SNOWLUMA_SHM_SIZE:-1gb}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 1048576
     # SnowLuma's native hook requires ptrace injection into the in-container
     # QQ process. These permissions are required by the official Docker image.
     # Keep them scoped to SnowLuma only; Guardian itself remains capability-free.
@@ -22,7 +26,9 @@ services:
       - no-new-privileges:true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
-      VNC_PASSWD: ${VNC_PASSWD:?Set VNC_PASSWD in .env before starting}
+      # Leave empty to use SnowLuma's random first-start noVNC password.
+      VNC_PASSWD: ${VNC_PASSWD:-}
+      SNOWLUMA_ONEBOT_HOST: 0.0.0.0
       SNOWLUMA_UID: ${SNOWLUMA_UID:-1000}
       SNOWLUMA_GID: ${SNOWLUMA_GID:-1000}
       SNOWLUMA_WEBUI_HOST: 0.0.0.0
@@ -47,6 +53,8 @@ services:
   # create config, migration artifacts, or SQLite state. This service has no
   # network and changes ownership only; it never deletes volume contents.
   guardian-storage-init:
+    profiles:
+      - guardian
     image: node:22-bookworm-slim
     user: "0:0"
     restart: "no"
@@ -65,6 +73,8 @@ services:
       - guardian-config:/guardian/config
 
   guardian:
+    profiles:
+      - guardian
     build:
       # The bundle root has sibling deploy/ and dist-snowluma/ directories.
       # This also works from a source checkout after `pnpm run build`.

@@ -111,18 +111,32 @@ SnowLuma 容器需要 SYS_PTRACE、seccomp=unconfined 和至少 1g 共享内存�
 cp deploy/.env.example deploy/.env
 ```
 
-编辑 deploy/.env，至少修改：
+编辑 deploy/.env。VNC_PASSWD 可以留空；SnowLuma 会在首次创建数据卷时生成随机 noVNC 密码并只在日志中打印一次。
+
+Guardian 的 `SNOWLUMA_ACCESS_TOKEN` 必须与 SnowLuma 的 Universal WebSocket `accessToken` 完全一致，所以首次部署分两阶段进行：
 
 ```text
-VNC_PASSWD=替换为足够长且唯一的密码
-SNOWLUMA_ACCESS_TOKEN=
+# 只先启动 SnowLuma
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d snowluma
 ```
 
-首次启动时保持 SNOWLUMA_ACCESS_TOKEN 为空。这让 SnowLuma 先生成 OneBot 配置并允许完成 QQ 登录；配置好 OneBot 后再填入 token 并仅重建 Guardian。
+进入 SnowLuma WebUI 创建或确认已启用的 `networks.wsServers` / `Universal` 条目，保存一个强随机 `accessToken`，再把同一个 token 写入 `deploy/.env`：
 
-生产环境还应把 SNOWLUMA_IMAGE 固定为经过验证的 SnowLuma 镜像标签，而不是长期依赖 latest。所有卷名必须在后续重启、升级和面板导入时保持不变。
+```text
+SNOWLUMA_ACCESS_TOKEN=<与 Universal wsServer 完全一致的强随机 token>
+```
 
-### 启动 SnowLuma 与 Guardian
+此时再启动 Guardian profile：
+
+```bash
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml up -d --build
+```
+
+这样首次启动不会因为 Guardian 缺少 token 而阻止 SnowLuma 完成初始化，同时 Guardian 从第一笔 OneBot 流量开始就保持 token 鉴权。
+
+生产环境还应把 SNOWLUMA_IMAGE 固定为经过验证的 SnowLuma immutable digest，而不是长期依赖 latest。所有卷名必须在后续重启、升级和面板导入时保持不变。
+
+### 验证并启动
 
 先验证 Compose 变量和路径：
 
@@ -130,19 +144,26 @@ SNOWLUMA_ACCESS_TOKEN=
 docker compose --env-file deploy/.env -f deploy/compose.yaml config
 ```
 
-确认无误后启动：
+确认无误后先启动 SnowLuma：
 
 ```bash
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
+docker compose --env-file deploy/.env -f deploy/compose.yaml up -d snowluma
 docker compose --env-file deploy/.env -f deploy/compose.yaml ps
 ```
 
-guardian-storage-init 是一次性的卷权限初始化服务。它只创建 Guardian 的两个持久目录并把它们交给非 root 运行用户；不要移除该服务，也不要把 Guardian 改为特权容器来绕过它。
+配置好 SnowLuma Universal WebSocket token 后，再启动 Guardian：
+
+```bash
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml up -d --build
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml ps
+```
+
+`guardian-storage-init` 是 Guardian profile 中的一次性卷权限初始化服务。它只创建 Guardian 的两个持久目录并把它们交给非 root 运行用户；不要移除该服务，也不要把 Guardian 改为特权容器来绕过它。
 
 ### 首次扫码登录 QQ
 
 1. 在部署机器本地浏览器打开 http://127.0.0.1:6081/。
-2. 用 deploy/.env 中的 VNC_PASSWD 登录 noVNC。
+2. 如果 VNC_PASSWD 留空，从 SnowLuma 日志中取得首次生成的随机 noVNC 密码；如果显式设置了 VNC_PASSWD，则使用该值登录。
 3. 在显示的 QQ 窗口中用手机 QQ 扫码登录。
 4. 打开 http://127.0.0.1:5099/ 进入 SnowLuma WebUI。
 
@@ -394,7 +415,7 @@ Android 路线是实验性的。SnowLuma 官方明确指出：proot 环境不具
 
 1. 上传或克隆完整发布包，保留根目录中的 dist-snowluma/ 与 deploy/。
 2. 在宝塔的 Docker Compose 应用中选择 deploy/compose.yaml。
-3. 导入 deploy/.env.example 的变量，至少设置强 VNC_PASSWD；首次部署可暂时留空 SNOWLUMA_ACCESS_TOKEN。
+3. 导入 deploy/.env.example 的变量；VNC_PASSWD 可留空。先启动 SnowLuma，配置 Universal WebSocket token，再填写 SNOWLUMA_ACCESS_TOKEN 并用 `--profile guardian` 启动 Guardian。
 4. 确认 Guardian 的构建上下文仍指向发布包根目录。若面板复制了 Compose 文件，必须让 guardian.build.context 能看到同级的 dist-snowluma/。
 5. 部署、通过受保护的本地浏览器或 SSH 隧道访问 noVNC 扫码、配置 Universal WebSocket token，然后只重建 Guardian。
 6. 升级或删除应用时保留五个命名卷，特别是两个 Guardian 卷和三个 SnowLuma/QQ 卷。
@@ -405,7 +426,7 @@ Android 路线是实验性的。SnowLuma 官方明确指出：proot 环境不具
 
 1. 创建 **Compose** 类型应用，并将 Compose 文件指向 deploy/compose.yaml。
 2. 确认应用工作目录保留发布包根目录；Guardian 镜像构建依赖 dist-snowluma/。
-3. 将 deploy/.env.example 的变量填入 1Panel 环境设置，保留卷名并设置强 VNC_PASSWD。
+3. 将 deploy/.env.example 的变量填入 1Panel 环境设置；VNC_PASSWD 可留空。按 Docker Compose 首次部署流程先启动 SnowLuma、配置 Universal WebSocket token，再启动 Guardian profile。
 4. 按 Docker Compose 首次部署流程完成 QQ 扫码、SnowLuma wsServers / Universal 配置和 Guardian 重建。
 5. 需要远程 WebUI 时，只为 Guardian 的 HTTP 端口配置已鉴权反向代理；不要公开 OneBot、noVNC 或 SnowLuma WebUI。
 
@@ -593,9 +614,9 @@ Docker Compose 升级应保留卷并重建服务：
 
 ```bash
 docker compose --env-file deploy/.env -f deploy/compose.yaml pull snowluma
-docker compose --env-file deploy/.env -f deploy/compose.yaml up -d --build
-docker compose --env-file deploy/.env -f deploy/compose.yaml ps
-docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail=100 guardian
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml up -d --build
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml ps
+docker compose --profile guardian --env-file deploy/.env -f deploy/compose.yaml logs --tail=100 guardian
 ```
 
 升级或迁移后，至少确认：
