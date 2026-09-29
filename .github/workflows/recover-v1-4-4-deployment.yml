@@ -22,32 +22,31 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Verify CI completed for this recovery PR's merge commit
+      - name: Verify CI completed on top of the recovery merge
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          REPO_OWNER: ${{ github.repository_owner }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          RECOVERY_BRANCH: chore/recover-v1-4-4-promotion-v2
+          RECOVERY_MERGE_SHA: a55f808e3b1b134152646fe3ddc535afd4838209
         run: |
           set -euo pipefail
 
           should_deploy=false
-          matches="$(gh api "repos/$REPO/pulls?state=closed&head=$REPO_OWNER:$RECOVERY_BRANCH&per_page=20" |
-            jq -r --arg sha "$HEAD_SHA" '
-              .[]
-              | select(.merged_at != null and .merge_commit_sha == $sha)
-              | .number
-            ' | head -n 1)"
+          compare_status="$(gh api "repos/$REPO/compare/$RECOVERY_MERGE_SHA...$HEAD_SHA" --jq .status)"
 
-          if [[ -n "$matches" ]]; then
-            should_deploy=true
-            echo "Recovery PR #$matches merged as CI head SHA $HEAD_SHA."
-          else
-            echo "This CI run is not the recovery PR merge commit; no deployment will run."
-            echo "CI head SHA: $HEAD_SHA"
-          fi
+          case "$compare_status" in
+            identical|ahead)
+              should_deploy=true
+              echo "CI head SHA $HEAD_SHA is at or ahead of the recovery merge $RECOVERY_MERGE_SHA."
+              ;;
+            *)
+              echo "This CI run does not descend from the recovery merge; no deployment will run."
+              echo "Recovery merge SHA: $RECOVERY_MERGE_SHA"
+              echo "CI head SHA: $HEAD_SHA"
+              echo "Compare status: $compare_status"
+              ;;
+          esac
 
           echo "should_deploy=$should_deploy" >> "$GITHUB_OUTPUT"
 

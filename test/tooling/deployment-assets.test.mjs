@@ -7,6 +7,8 @@ import { describe, it } from 'node:test';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const compose = readFileSync(join(root, 'deploy', 'compose.yaml'), 'utf8');
 const dockerignore = readFileSync(join(root, '.dockerignore'), 'utf8');
+const deployWorkflow = readFileSync(join(root, '.github', 'workflows', 'deploy.yml'), 'utf8');
+const recoveryWorkflow = readFileSync(join(root, '.github', 'workflows', 'recover-v1-4-4-deployment.yml'), 'utf8');
 const systemdUnit = readFileSync(join(root, 'deploy', 'native', 'qq-guardian.service'), 'utf8');
 const windowsStateInitializer = readFileSync(join(root, 'deploy', 'native', 'initialize-guardian-state.ps1'), 'utf8');
 
@@ -57,6 +59,20 @@ describe('deployment assets', () => {
 
   it('keeps break-glass administrator recovery disabled by default', () => {
     assert.match(compose, /^      QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY: \$\{QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY:-0\}$/m);
+  });
+
+  it('builds the release image from an explicit minimal context that includes dist-snowluma', () => {
+    assert.equal(deployWorkflow.includes('Prepare minimal Guardian image build context'), true);
+    assert.equal(deployWorkflow.includes('test -f "$BUNDLE_PATH/dist-snowluma/index.mjs"'), true);
+    assert.equal(deployWorkflow.includes('cp -a "$BUNDLE_PATH/dist-snowluma" "$context_dir/dist-snowluma"'), true);
+    assert.equal(deployWorkflow.includes('context: ${{ steps.image-context.outputs.path }}'), true);
+    assert.equal(deployWorkflow.includes('file: ${{ steps.image-context.outputs.path }}/Dockerfile'), true);
+  });
+
+  it('allows the one-time recovery workflow to retry from later main CI descendants', () => {
+    assert.equal(recoveryWorkflow.includes('RECOVERY_MERGE_SHA: a55f808e3b1b134152646fe3ddc535afd4838209'), true);
+    assert.equal(recoveryWorkflow.includes('gh api "repos/$REPO/compare/$RECOVERY_MERGE_SHA...$HEAD_SHA" --jq .status'), true);
+    assert.equal(recoveryWorkflow.includes('identical|ahead'), true);
   });
 
   it('starts the standalone entry point that is actually packaged in the Linux release', () => {
