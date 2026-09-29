@@ -6,11 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const [scope = 'unit', ...argumentsAfterScope] = process.argv.slice(2);
+
+// The WebUI smoke specs under test/webui are Playwright specs and must be
+// executed by the Playwright runner with a live provider. The "all" scope
+// intentionally covers the Node test scopes only.
 const testDirectories = {
   unit: ['test/unit'],
   integration: ['test/integration'],
   tooling: ['test/tooling'],
-  all: ['test'],
+  all: ['test/unit', 'test/integration', 'test/tooling'],
 };
 
 const directories = testDirectories[scope];
@@ -28,11 +32,18 @@ if (files.length === 0) {
   process.exit(1);
 }
 
+const relativeFiles = files.map((file) => relative(ROOT, file));
+
+if (argumentsAfterScope.includes('--list')) {
+  process.stdout.write(`${relativeFiles.join('\n')}\n`);
+  process.exit(0);
+}
+
 const nodeArguments = ['--experimental-strip-types', '--test'];
 const reporter = argumentsAfterScope.find((argument) => argument.startsWith('--reporter='));
 if (reporter) nodeArguments.push(`--test-reporter=${reporter.slice('--reporter='.length)}`);
 nodeArguments.push(...argumentsAfterScope.filter((argument) => argument !== reporter));
-nodeArguments.push(...files.map((file) => relative(ROOT, file)));
+nodeArguments.push(...relativeFiles);
 
 const result = spawnSync(process.execPath, nodeArguments, {
   cwd: ROOT,
