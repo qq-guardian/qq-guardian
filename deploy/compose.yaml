@@ -12,15 +12,13 @@ services:
     image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:latest}
     restart: unless-stopped
     shm_size: ${SNOWLUMA_SHM_SIZE:-1gb}
-    # QG-001: SYS_PTRACE and seccomp=unconfined removed.
-    # SYS_PTRACE is not required by SnowLuma in normal operation and expands
-    # the container's attack surface.  If your deployment genuinely requires
-    # ptrace (e.g. a custom debugging build), re-add it via COMPOSE_PROFILES
-    # or a local override file — never in the shared production configuration.
-    # seccomp=unconfined is replaced by Docker's default seccomp profile which
-    # restricts the majority of dangerous syscalls.  If SnowLuma fails a
-    # specific syscall, file an issue upstream to allow-list it precisely.
+    # SnowLuma's native hook requires ptrace injection into the in-container
+    # QQ process. These permissions are required by the official Docker image.
+    # Keep them scoped to SnowLuma only; Guardian itself remains capability-free.
+    cap_add:
+      - SYS_PTRACE
     security_opt:
+      - seccomp=unconfined
       - no-new-privileges:true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
