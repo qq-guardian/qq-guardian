@@ -67,7 +67,7 @@
   },
   "main": "dist/index.mjs",
   "dependencies": {
-    "@snowluma/sdk": "1.14.15",
+    "@snowluma/sdk": "1.14.20",
     "ws": "^8.21.3"
   }
 }
