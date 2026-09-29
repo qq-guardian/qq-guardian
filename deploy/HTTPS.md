@@ -23,14 +23,15 @@ network; the raw Guardian host mapping remains loopback-only.
 
 ```sh
 cp deploy/.env.example deploy/.env
-# Edit deploy/.env and set at minimum VNC_PASSWD, the OneBot token when ready,
-# and GUARDIAN_DOMAIN=guardian.example.com.
+# Edit deploy/.env and set GUARDIAN_DOMAIN=guardian.example.com.
+# VNC_PASSWD may stay empty. First start SnowLuma, configure its Universal
+# OneBot token, then enable the Guardian profile with that token.
 
-docker compose --env-file deploy/.env \
+docker compose --profile guardian --env-file deploy/.env \
   -f deploy/compose.yaml \
   -f deploy/compose.https.yaml config
 
-docker compose --env-file deploy/.env \
+docker compose --profile guardian --env-file deploy/.env \
   -f deploy/compose.yaml \
   -f deploy/compose.https.yaml up -d --build
 ```
@@ -58,8 +59,8 @@ proxy/tunnel and `SNOWLUMA_ACCESS_TOKEN`.
 
 ## Panel deployments
 
-BT Panel/1Panel users should either import both Compose files above or use the
-panel's existing HTTPS reverse-proxy feature to proxy the loopback/private
-Guardian service. In either case, the security invariant is the same: public
-clients terminate HTTPS at the trusted proxy; Guardian itself is not directly
-published on an unauthenticated plaintext public socket.
+BT Panel/1Panel users should either import both Compose files above with the
+`guardian` profile enabled or use the panel's existing HTTPS reverse-proxy
+feature to proxy the loopback/private Guardian service. In either case, the
+security invariant is the same: public clients terminate HTTPS at the trusted
+proxy; Guardian itself is not directly published on an unauthenticated plaintext public socket.
