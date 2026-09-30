@@ -157,7 +157,7 @@ jobs:
           retention-days: 7
 
   full-bundles:
-    name: full-${{ matrix.platform }}
+    name: provider-${{ matrix.platform }}
     needs:
       - metadata
       - quality
@@ -188,7 +188,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.23.2
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install and build from the frozen lockfile
