@@ -67,8 +67,8 @@ for (const file of platformFiles) {
 entries.push(
   { name: `${bundleRoot}/LICENSE`, data: readFileSync(join(ROOT, 'LICENSE')), mode: 0o644 },
   { name: `${bundleRoot}/UPSTREAM-SNOWLUMA.json`, data: readFileSync(join(ROOT, 'UPSTREAM-SNOWLUMA.json')), mode: 0o644 },
-  { name: `${bundleRoot}/official-snowluma.sha256`, data: Buffer.from(`${official.sha256}  ${official.file}\\n`, 'utf8'), mode: 0o644 },
-  { name: `${bundleRoot}/official-snowluma.size`, data: Buffer.from(`${official.size}\\n`, 'utf8'), mode: 0o644 },
+  { name: `${bundleRoot}/official-snowluma.sha256`, data: Buffer.from(`${official.sha256}  ${official.file}\n`, 'utf8'), mode: 0o644 },
+  { name: `${bundleRoot}/official-snowluma.size`, data: Buffer.from(`${official.size}\n`, 'utf8'), mode: 0o644 },
   {
     name: `${bundleRoot}/SNOWLUMA-INTEGRATION-NOTICE.md`,
     data: Buffer.from(notice(official), 'utf8'),
@@ -110,7 +110,7 @@ function requireFile(path, label) {
 
 function readme(version, target, asset) {
   const command = target === 'win-x64'
-    ? `powershell -ExecutionPolicy Bypass -File .\\deploy\\native\\snowluma-install.ps1 -OfficialPackage C:\\Packages\\${asset.file} -AcceptEula -AcceptPrivacy -Unattended`
+    ? `powershell -ExecutionPolicy Bypass -File .\\deploy\native\\snowluma-install.ps1 -OfficialPackage C:\\Packages\\${asset.file} -AcceptEula -AcceptPrivacy -Unattended`
     : `sudo sh ./deploy/native/snowluma-install.sh --package /srv/packages/${asset.file} --accept-eula --accept-privacy --unattended`;
 
   return [
@@ -129,7 +129,7 @@ function readme(version, target, asset) {
     command,
     '',
     'Unattended mode removes installer prompts and registers/starts the local supervisor. QQ login and any QR approval remain operator actions.',
-  ].join('\\n') + '\\n';
+  ].join('\n') + '\n';
 }
 
 function notice(asset) {
@@ -147,5 +147,5 @@ function notice(asset) {
     '',
     'SnowLuma native components remain subject to the upstream proprietary terms. This repository does not redistribute those binaries.',
     '',
-  ].join('\\n');
+  ].join('\n');
 }
