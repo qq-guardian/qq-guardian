@@ -67,6 +67,8 @@ SnowLuma
 
 这里必须区分两个发布物：
 
+先从 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 取得对应平台的 integration installer，再从 [SnowLuma 官方 Release](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20) 取得对应平台的 FULL 包。
+
 - **SnowLuma 官方 FULL 包**：来自 [SnowLuma 官方 Release](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20)，包含官方 launcher、Node.js runtime、native addons、WebUI 和协议文件。
 - **QQ Guardian integration installer**：来自本仓库，只包含 Guardian runtime、安装器、supervisor、校验清单和部署文档；它不会重新分发 SnowLuma native binaries。
 
