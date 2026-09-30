@@ -28,11 +28,15 @@ test('SnowLuma contract records the exact current official full assets', () => {
   assert.equal(upstream.verification.officialReleaseIsNeverRepublishedByQQGuardian, true);
 });
 
-test('integration installer never packages SnowLuma proprietary native binaries', () => {
-  assert.match(packager, /native\\s+SnowLuma.*not copied|native.*never.*copied/i);
+test('integration installer never packages or extracts SnowLuma proprietary native binaries', () => {
+  assert.match(packager, /native.*not.*copied/i);
   assert.match(verifier, /must not redistribute SnowLuma native binaries/);
-  assert.match(linuxInstaller, /Supply the exact official SnowLuma FULL archive/);
-  assert.match(windowsInstaller, /OfficialPackage/);
+  assert.match(linuxInstaller, /will not extract or copy it/);
+  assert.match(windowsInstaller, /will not extract or copy it/);
+  assert.doesNotMatch(linuxInstaller, /tar -xzf/);
+  assert.doesNotMatch(windowsInstaller, /Expand-Archive/);
+  assert.match(linuxInstaller, /--snowluma-root PATH/);
+  assert.match(windowsInstaller, /SnowLumaRoot/);
 });
 
 test('Linux unattended mode installs a persistent supervisor', () => {
