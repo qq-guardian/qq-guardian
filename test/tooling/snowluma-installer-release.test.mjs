@@ -9,3 +9,4 @@ for(const p of ['win-x64','linux-x64','linux-arm64']){assert.ok(manifest.platfor
 assert.match(release,/package-snowluma-installer\.mjs/);assert.match(release,/verify-snowluma-installer\.mjs/);assert.doesNotMatch(release,/package-snowluma\.mjs/);
 for(const f of ['scripts/package-snowluma-installer.mjs','scripts/verify-snowluma-installer.mjs','deploy/native/snowluma-install.ps1','deploy/native/snowluma-install.sh','deploy/native/start-snowluma-guardian.ps1','deploy/native/start-snowluma-guardian.sh','deploy/native/unattended-docker.sh'])assert.equal(existsSync(join(ROOT,f)),true,f);
 assert.equal(manifest.nativeBinariesRedistributed,false);
+assert.equal(manifest.distributionBoundary,'official-release-input-only');
