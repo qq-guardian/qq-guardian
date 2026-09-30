@@ -99,11 +99,11 @@ function verifyZip(name, required) {
     throw new Error('NapCat SHA-256 sidecar does not match ' + name);
   }
 
-  const names = new Set(readTarGzipEntryNames(archivePath));
-  if (archivePath.endsWith('.zip')) {
-    names.clear();
-    for (const entry of readZipEntryNames(archivePath)) names.add(entry);
-  }
+  const names = new Set(
+    archivePath.endsWith('.zip')
+      ? readZipEntryNames(archivePath)
+      : readTarGzipEntryNames(archivePath),
+  );
   for (const requiredEntry of required) {
     if (!names.has(requiredEntry)) throw new Error(name + ' is missing ' + requiredEntry);
   }
