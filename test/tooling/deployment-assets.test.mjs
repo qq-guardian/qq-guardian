@@ -34,7 +34,8 @@ describe('deployment assets', () => {
     const snowlumaService = compose.match(/^  snowluma:[\s\S]*?^  guardian-storage-init:/m)?.[0] ?? '';
     assert.ok(snowlumaService, 'SnowLuma service block must exist');
     assert.doesNotMatch(snowlumaService, /^      - no-new-privileges:true$/m);
-    assert.match(compose, /^      - no-new-privileges:true$/m);\n    assert.match(compose, /^      VNC_PASSWD: \$\{VNC_PASSWD:-\}$/m);
+    assert.match(compose, /^      - no-new-privileges:true$/m);
+    assert.match(compose, /^      VNC_PASSWD: \$\{VNC_PASSWD:-\}$/m);
     assert.match(compose, /^      SNOWLUMA_ONEBOT_HOST: 0\.0\.0\.0$/m);
     assert.match(compose, /^      SNOWLUMA_WEBUI_HOST: 0\.0\.0\.0$/m);
     assert.match(compose, /^      SNOWLUMA_WEBUI_PORT: 5099$/m);
