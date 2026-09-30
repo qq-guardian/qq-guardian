@@ -39,7 +39,7 @@ jobs:
           git fetch --depth=1 origin main
           git show FETCH_HEAD:scripts/verify-release-assets.mjs > scripts/verify-release-assets.mjs
           git show FETCH_HEAD:scripts/verify-release-layout.mjs > scripts/verify-release-layout.mjs
-          git show FETCH_HEAD/scripts/verify-deployment-release.mjs > scripts/verify-deployment-release.mjs
+          git show FETCH_HEAD:scripts/verify-deployment-release.mjs > scripts/verify-deployment-release.mjs
           git show FETCH_HEAD:scripts/verify-snowluma-installer.mjs > scripts/verify-snowluma-installer.mjs
 
       - name: Download existing v1.4.8 release assets
