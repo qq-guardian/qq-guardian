@@ -108,7 +108,7 @@ describe('release workflow governance', () => {
     assert.match(release, /qq-guardian-snowluma-installer-v\*\./);
     assert.match(release, /pattern: release-full-\*-\$\{\{ github\.run_id \}\}/);
     assert.match(release, /pattern: snowluma-installer-\*-\$\{\{ github\.run_id \}\}/);
-    assert.match(release, /releaseDownload\.zip/);
+    assert.match(release, /--compatibility-asset/);
     assert.match(release, /SHA256SUMS/);
     assert.match(release, /attest-build-provenance@[a-f0-9]{40}/);
   });
@@ -128,7 +128,7 @@ describe('release workflow governance', () => {
     assert.match(release, /source_sha: \$\{\{ needs\.metadata\.outputs\.source_sha \}\}/);
     assert.match(release, /Deployment handoff: a successful publication continues into the promotion job/);
     assert.match(release, /cancel-in-progress: false/);
-    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 2);
+    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 3);
     assert.equal((request.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
   });
 });
