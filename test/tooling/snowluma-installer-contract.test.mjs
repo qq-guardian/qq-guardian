@@ -29,7 +29,7 @@ test('SnowLuma contract records the exact current official full assets', () => {
 });
 
 test('integration installer never packages or extracts SnowLuma proprietary native binaries', () => {
-  assert.match(packager, /native.*not.*copied/i);
+  assert.match(packager, /native components are never copied/i);
   assert.match(verifier, /must not redistribute SnowLuma native binaries/);
   assert.match(linuxInstaller, /will not extract or copy it/);
   assert.match(windowsInstaller, /will not extract or copy it/);
@@ -43,7 +43,7 @@ test('Linux unattended mode installs a persistent supervisor', () => {
   assert.match(linuxInstaller, /systemctl enable --now qq-guardian-snowluma\.service/);
   assert.match(systemd, /Restart=always/);
   assert.match(linuxStarter, /SnowLuma or Guardian exited/);
-  assert.match(linuxStarter, /"$SNOWLUMA_ROOT\/node" "$GUARDIAN_ROOT\/dist-snowluma\/index\.mjs"/);
+  assert.match(linuxStarter, /SNOWLUMA_ROOT\/node.*GUARDIAN_ROOT\/dist-snowluma\/index\.mjs/);
 });
 
 test('Windows unattended mode registers and starts a persistent task', () => {
