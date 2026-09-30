@@ -90,6 +90,8 @@ jobs:
     name: release-quality
     needs: metadata
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -142,10 +144,15 @@ jobs:
           pnpm run verify:manifests
           git diff --exit-code -- dist
 
-      - name: Package provider runtimes and source-complete lite bundle
+      - name: Package provider runtimes, source-complete lite bundle, and immutable deployment input
         run: |
           pnpm run package:providers:versioned
           pnpm run package:project:lite
+          node scripts/package-project.mjs --flavor=full --platform=linux-x64 --compatibility-asset
+          rm -f release/qq-guardian-v*-full-linux-x64.zip
+          rm -f release/qq-guardian-v*-full-linux-x64.tar.gz
+          rm -f release/qq-guardian-v*-full-linux-x64.zip.sha256
+          rm -f release/qq-guardian-v*-full-linux-x64.tar.gz.sha256
 
       - name: Upload common immutable assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -155,6 +162,70 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  full-bundles:
+    name: full-${{ matrix.platform }}
+    needs:
+      - metadata
+      - quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win-x64
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: ubuntu-24.04-arm
+            platform: linux-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out immutable release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.metadata.outputs.source_ref }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Install and build from the frozen lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Package Guardian full bundle
+        shell: bash
+        run: |
+          node scripts/package-project.mjs \
+            --flavor=full \
+            --platform=${{ matrix.platform }} \
+            --output-dir=release
+
+      - name: Verify Guardian full bundle
+        run: |
+          node scripts/verify-release-layout.mjs --directory=release
+          node scripts/verify-release-assets.mjs release
+
+      - name: Upload Guardian full bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-full-${{ matrix.platform }}-${{ github.run_id }}
+          path: |
+            release/qq-guardian-v*-full-${{ matrix.platform }}.zip
+            release/qq-guardian-v*-full-${{ matrix.platform }}.tar.gz
+            release/qq-guardian-v*-full-${{ matrix.platform }}.zip.sha256
+            release/qq-guardian-v*-full-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
   snowluma-installers:
     name: installer-${{ matrix.platform }}
     needs:
@@ -211,6 +282,7 @@ jobs:
     needs:
       - metadata
       - quality
+      - full-bundles
       - snowluma-installers
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -225,10 +297,23 @@ jobs:
           ref: ${{ needs.metadata.outputs.source_ref }}
           persist-credentials: false
 
-      - name: Download exact common assets
+      - name: Download common release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: release-*
+          name: release-common-${{ needs.quality.outputs.sha }}
+          path: release
+
+      - name: Download Guardian full bundles
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-full-*-${{ github.run_id }}
+          path: release
+          merge-multiple: true
+
+      - name: Download SnowLuma integration installers
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: snowluma-installer-*-${{ github.run_id }}
           path: release
           merge-multiple: true
 

@@ -93,15 +93,22 @@ describe('release workflow governance', () => {
     assert.doesNotMatch(release, /\bsleep\b/);
   });
 
-  it('builds SnowLuma integration installers from the official platform matrix', () => {
+  it('publishes Guardian full bundles and all three SnowLuma integration installers', () => {
     for (const platform of ['win-x64', 'linux-x64', 'linux-arm64']) {
       assert.match(release, new RegExp('platform: ' + platform));
     }
+    assert.match(release, /full-bundles:/);
+    assert.match(release, /package-project\.mjs[\s\S]*--flavor=full/);
+    assert.match(release, /release-full-\$\{\{ matrix\.platform \}\}-\$\{\{ github\.run_id \}\}/);
+    assert.match(release, /snowluma-installers:/);
     assert.match(release, /package-snowluma-installer\.mjs/);
     assert.match(release, /verify-snowluma-installer\.mjs/);
     assert.doesNotMatch(release, /package-snowluma\.mjs/);
     assert.doesNotMatch(release, /qq-guardian-snowluma-v\*\.(?:zip|tar\.gz)/);
     assert.match(release, /qq-guardian-snowluma-installer-v\*\./);
+    assert.match(release, /pattern: release-full-\*-\$\{\{ github\.run_id \}\}/);
+    assert.match(release, /pattern: snowluma-installer-\*-\$\{\{ github\.run_id \}\}/);
+    assert.match(release, /--compatibility-asset/);
     assert.match(release, /SHA256SUMS/);
     assert.match(release, /attest-build-provenance@[a-f0-9]{40}/);
   });
@@ -121,7 +128,7 @@ describe('release workflow governance', () => {
     assert.match(release, /source_sha: \$\{\{ needs\.metadata\.outputs\.source_sha \}\}/);
     assert.match(release, /Deployment handoff: a successful publication continues into the promotion job/);
     assert.match(release, /cancel-in-progress: false/);
-    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 2);
+    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 3);
     assert.equal((request.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
   });
 });
