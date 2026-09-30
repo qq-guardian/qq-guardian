@@ -21,7 +21,7 @@
     "typescript": "7.0.2"
   },
   "engines": {
-    "node": ">=22.6.0"
+    "node": "^22.13.0 || >=23.4.0"
   },
   "napcat": {
     "tags": [
@@ -39,7 +39,7 @@
     "build": "tsc --noEmit && node scripts/build.mjs",
     "build:watch": "node scripts/build.mjs --watch",
     "package": "tsc --noEmit && node scripts/build.mjs && node scripts/package.mjs && node scripts/verify-release.mjs --archive=napcat",
-    "package:snowluma": "tsc --noEmit && node scripts/build.mjs && node scripts/package-snowluma.mjs && node scripts/verify-release.mjs --archive=snowluma",
+    "package:snowluma": "tsc --noEmit && node scripts/build.mjs && node scripts/package-snowluma.mjs --platform=linux-x64 --flavor=lite && node scripts/verify-snowluma-provider-layout.mjs --directory=release",
     "package:all": "tsc --noEmit && node scripts/build.mjs && node scripts/package.mjs && node scripts/package-snowluma.mjs && node scripts/verify-release.mjs",
     "package:archives": "node scripts/package.mjs && node scripts/package-snowluma.mjs && node scripts/verify-release.mjs",
     "package:project:lite": "node scripts/package-project.mjs --flavor=lite",
@@ -63,7 +63,9 @@
     "test:unit": "node scripts/run-tests.mjs unit",
     "test:integration": "node scripts/run-tests.mjs integration",
     "test:tooling": "node scripts/run-tests.mjs tooling",
-    "test:ci": "node scripts/run-tests.mjs all --reporter=spec"
+    "test:ci": "node scripts/run-tests.mjs all --reporter=spec",
+    "package:snowluma:provider": "node scripts/package-snowluma.mjs",
+    "package:snowluma:verify": "node scripts/verify-snowluma-provider-layout.mjs --directory=release"
   },
   "main": "dist/index.mjs",
   "dependencies": {
