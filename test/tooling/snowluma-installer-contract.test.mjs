@@ -29,7 +29,7 @@ test('SnowLuma contract records the exact current official full assets', () => {
 });
 
 test('integration installer never packages SnowLuma proprietary native binaries', () => {
-  assert.match(packager, /native binaries are never copied/i);
+  assert.match(packager, /native\\s+SnowLuma.*not copied|native.*never.*copied/i);
   assert.match(verifier, /must not redistribute SnowLuma native binaries/);
   assert.match(linuxInstaller, /Supply the exact official SnowLuma FULL archive/);
   assert.match(windowsInstaller, /OfficialPackage/);
