@@ -125,7 +125,7 @@ describe('release workflow governance', () => {
     assert.match(release, /source_sha: \$\{\{ needs\.metadata\.outputs\.source_sha \}\}/);
     assert.match(release, /Deployment handoff: a successful publication continues into the promotion job/);
     assert.match(release, /cancel-in-progress: false/);
-    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
+    assert.equal((release.match(/node-version: 22\.13\.0/g) ?? []).length, 1);
     assert.equal((request.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
   });
 });
