@@ -77,6 +77,8 @@ QQ Guardian 与官方 SnowLuma 是两个独立发行项目。Guardian 的 provid
 
 先从官方 [SnowLuma Releases](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20) 获取与你的平台匹配的官方包。
 
+Guardian 的最新正式包从 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 获取。
+
 Guardian vX.Y.Z provider release 也按同一 platform + full/lite 矩阵发布：
 - Windows：ZIP
 - Linux：TAR.GZ
