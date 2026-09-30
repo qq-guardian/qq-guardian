@@ -87,20 +87,22 @@ QQ Guardian 的 integration installer **故意小于这些值**；安装完成�
 先分别取得官方 FULL 包和本仓库对应的 integration installer：
 
 ```bash
-sha256sum SnowLuma-v1.14.20-linux-x64.tar.gz
 sha256sum -c qq-guardian-snowluma-installer-v<VERSION>-linux-x64.tar.gz.sha256
 
 tar -xzf qq-guardian-snowluma-installer-v<VERSION>-linux-x64.tar.gz
 cd qq-guardian-snowluma-installer-v<VERSION>-linux-x64
 
+# 先按 SnowLuma 官方 README 的方式把官方 FULL 包解压到 /opt/snowluma。
+# Guardian installer 不会替你复制/解压官方 proprietary native binaries。
 sudo sh deploy/native/snowluma-install.sh \
+  --snowluma-root /opt/snowluma \
   --package /srv/packages/SnowLuma-v1.14.20-linux-x64.tar.gz \
   --accept-eula \
   --accept-privacy \
   --unattended
 ```
 
-安装器会再次验证官方包的**文件名、字节大小、SHA-256 和关键 native 文件**，然后原样复制官方 SnowLuma，并把 Guardian 放在独立的 `qq-guardian/` 子目录：
+安装器会验证你已经取得的官方包的**文件名、字节大小、SHA-256 和关键 native 文件**，同时检查 `--snowluma-root` 中的官方 launcher、Node.js runtime 和 native 文件。它不会解压或复制 SnowLuma proprietary binaries，只安装 Guardian overlay，并把它放到 `qq-guardian/` 子目录：
 
 ```text
 /opt/qq-guardian/snowluma/
@@ -129,7 +131,7 @@ SnowLuma-v1.14.20-win-x64.zip
 qq-guardian-snowluma-installer-v<VERSION>-win-x64.zip
 ```
 
-管理员 PowerShell：
+管理员 PowerShell（先按 SnowLuma 官方文档把 FULL ZIP 解压到例如 `C:\\SnowLuma`）：
 
 ```powershell
 Expand-Archive '.\qq-guardian-snowluma-installer-v<VERSION>-win-x64.zip' -DestinationPath '.\qqg-installer'
@@ -142,13 +144,13 @@ Set-Location '.\qqg-installer\qq-guardian-snowluma-installer-v<VERSION>-win-x64'
   -Unattended
 ```
 
-安装器会验证官方 ZIP 的精确大小和 SHA-256，然后保持官方 SnowLuma 根目录原样，把 Guardian 放入 `qq-guardian\\`。Windows 使用名为 **QQ Guardian + SnowLuma** 的计划任务在用户登录时启动并监督两个进程。
+安装器会验证官方 ZIP 的精确大小和 SHA-256，并检查 `C:\\SnowLuma` 中的官方文件。它不会解压或复制 SnowLuma proprietary binaries，只把 Guardian 放入 `qq-guardian\\`。Windows 使用名为 **QQ Guardian + SnowLuma** 的计划任务在用户登录时启动并监督两个进程。
 
 `-Unattended` / `--unattended` 只表示安装、注册任务和启动过程不需要安装器交互；**QQ 扫码登录以及任何需要人工确认的 QQ 操作仍然需要操作员完成。**
 
 ### 发行边界
 
-QQ Guardian 的发布包不包含 SnowLuma proprietary native binaries。SnowLuma 官方 `EULA.md` 对这些组件规定了第三方安装包/自动化部署的授权边界，因此这里采用“**官方包原样 + Guardian overlay**”模型，而不是重新打包一个缩小版 SnowLuma。
+QQ Guardian 的发布包不包含 SnowLuma proprietary native binaries。SnowLuma 官方 `EULA.md` 同时限制未经授权的第三方自动化部署，因此这里采用“**官方包由官方流程安装 + Guardian overlay 无人值守注册**”模型。这样最终 SnowLuma 文件仍然来自官方 Release，不会被第三方安装器重新生成。
 
 ## 推荐路径：Linux Docker Compose 首次部署
 
