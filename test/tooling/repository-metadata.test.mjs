@@ -20,7 +20,7 @@ test('repository metadata and release links use the canonical repository', () =>
   assert.equal(distPackageJson.homepage, CANONICAL_REPO);
   assert.equal(distPackageJson.napcat.homepage, CANONICAL_REPO);
   assert.ok(readme.includes(CANONICAL_RELEASES));
-  assert.ok(deploymentGuide.includes(CANONICAL_RELEASES));
+  assert.ok(deploymentGuide.includes(CANONICAL_REPO));
   assert.equal(readme.includes('https://github.com/ShiYuPIay/qq-guardian/releases/latest'), false);
   assert.equal(deploymentGuide.includes('https://github.com/ShiYuPIay/napcat-plugin-qq-guardian/releases/latest'), false);
 });

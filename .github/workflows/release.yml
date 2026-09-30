@@ -262,7 +262,14 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
-      - name: Package SnowLuma installer
+
+      - name: Verify live official SnowLuma release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/verify-upstream-snowluma-release.mjs
+
+      - name: Package SnowLuma integration installer
+
         run: node scripts/package-snowluma-installer.mjs --platform=${{ matrix.platform }} --output-dir=release
       - name: Verify SnowLuma installer
         run: node scripts/verify-snowluma-installer.mjs --directory=release

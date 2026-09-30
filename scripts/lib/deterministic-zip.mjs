@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { deflateRawSync, gunzipSync, gzipSync } from 'node:zlib';
+import { deflateRawSync, gunzipSync, gzipSync, inflateRawSync } from 'node:zlib';
 
 const DOS_TIME = 0x0000;
 const DOS_DATE = 0x0021;
@@ -188,6 +188,79 @@ export function writeSha256Sidecar(archivePath) {
 }
 
 /** @param {string} archivePath */
+/**
+ * Read one regular-file payload from a deterministic ZIP archive.
+ * This intentionally supports the ZIP methods emitted by this module.
+ * @param {string} archivePath
+ * @param {string} entryName
+ */
+export function readZipEntry(archivePath, entryName) {
+  const archive = readFileSync(archivePath);
+  const endOffset = findEndOfCentralDirectory(archive);
+  const entryCount = archive.readUInt16LE(endOffset + 10);
+  let offset = archive.readUInt32LE(endOffset + 16);
+
+  for (let index = 0; index < entryCount; index += 1) {
+    if (archive.readUInt32LE(offset) !== ZIP_CENTRAL_DIRECTORY_HEADER) {
+      throw new Error(`Invalid ZIP central-directory entry at offset ${offset}`);
+    }
+    const method = archive.readUInt16LE(offset + 10);
+    const compressedSize = archive.readUInt32LE(offset + 20);
+    const nameLength = archive.readUInt16LE(offset + 28);
+    const extraLength = archive.readUInt16LE(offset + 30);
+    const commentLength = archive.readUInt16LE(offset + 32);
+    const localOffset = archive.readUInt32LE(offset + 42);
+    const nameStart = offset + 46;
+    const name = archive.subarray(nameStart, nameStart + nameLength).toString('utf8');
+
+    if (name === entryName) {
+      if (archive.readUInt32LE(localOffset) !== ZIP_LOCAL_FILE_HEADER) {
+        throw new Error(`Invalid ZIP local-file header for ${entryName}`);
+      }
+      const localNameLength = archive.readUInt16LE(localOffset + 26);
+      const localExtraLength = archive.readUInt16LE(localOffset + 28);
+      const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+      const compressed = archive.subarray(dataStart, dataStart + compressedSize);
+      if (method === 0) return Buffer.from(compressed);
+      if (method === 8) return inflateRawSync(compressed);
+      throw new Error(`Unsupported ZIP compression method ${method} for ${entryName}`);
+    }
+
+    offset = nameStart + nameLength + extraLength + commentLength;
+  }
+
+  throw new Error(`ZIP entry not found: ${entryName}`);
+}
+
+/**
+ * Read one regular-file payload from a gzip-compressed TAR archive.
+ * @param {string} archivePath
+ * @param {string} entryName
+ */
+export function readTarGzipEntry(archivePath, entryName) {
+  const archive = gunzipSync(readFileSync(archivePath));
+  let offset = 0;
+
+  while (offset + 512 <= archive.length) {
+    const header = archive.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+
+    const name = readTarText(header, 0, 100);
+    const prefix = readTarText(header, 345, 155);
+    const sizeText = readTarText(header, 124, 12).trim();
+    const size = sizeText ? Number.parseInt(sizeText, 8) : 0;
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error('Invalid TAR entry size');
+
+    const fullName = prefix ? `${prefix}/${name}` : name;
+    const dataStart = offset + 512;
+    if (fullName === entryName) return Buffer.from(archive.subarray(dataStart, dataStart + size));
+
+    offset = dataStart + Math.ceil(size / 512) * 512;
+  }
+
+  throw new Error(`TAR entry not found: ${entryName}`);
+}
+
 export function readZipEntryNames(archivePath) {
   const archive = readFileSync(archivePath);
   const endOffset = findEndOfCentralDirectory(archive);

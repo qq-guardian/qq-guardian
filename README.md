@@ -53,7 +53,16 @@ logic; choose the provider that matches the host you already operate.
 
 ## SnowLuma 独立服务
 
-SnowLuma 部署使用单独的发布包 `qq-guardian-snowluma.zip`。推荐从本仓库提供的 Docker Compose sidecar 开始：SnowLuma 负责 QQ 与 OneBot，Guardian 以低权限独立服务连接其 WebSocket，不需要把 OneBot 端口暴露到公网。
+QQ Guardian **不重新打包或伪造 SnowLuma 官方发行包**。官方 SnowLuma 的 Windows/Linux 完整包保留其原始文件、Node.js runtime、launcher、native addons 和官方协议文件；Guardian Release 只提供对应平台的 **integration installer**。
+
+当前官方基准为 SnowLuma `v1.14.20`。部署时需要分别取得：
+
+1. QQ Guardian 对应平台的 `qq-guardian-snowluma-installer-v<version>-<platform>`；
+2. [SnowLuma 官方 Release](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20) 中对应的 **FULL** 官方包。
+
+安装器会先校验官方包的文件名、字节大小、SHA-256 和关键 native 文件，然后把官方 SnowLuma 原样安装，再把 Guardian 放在独立的 `qq-guardian/` 目录中。这样安装后的 SnowLuma 主目录与官方 Release 包保持一致，而不是拿一个缩水的第三方压缩包冒充官方发行物。
+
+Windows 和 Linux 原生安装器均支持 `--unattended` / `-Unattended`：安装完成后会注册持久化任务或 systemd 服务并自动启动 SnowLuma + Guardian。QQ 扫码登录仍然需要操作员完成。
 
 完整教程覆盖以下环境：
 
@@ -65,7 +74,7 @@ SnowLuma 部署使用单独的发布包 `qq-guardian-snowluma.zip`。推荐从�
 - Android / Termux（实验性）；
 - BT Panel（宝塔）、1Panel 与其他兼容 Compose 的面板。
 
-请从 [SnowLuma 完整部署教程](docs/deployment/snowluma.md) 开始。它包含发布包校验、首次扫码登录、SnowLuma OneBot `wsServers` 的 `Universal` 配置、持久卷、备份、迁移、回滚和 SDK 备用连接说明。
+请从 [SnowLuma 完整部署教程](docs/deployment/snowluma.md) 开始。
 
 ## 日常使用
 

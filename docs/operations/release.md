@@ -41,28 +41,44 @@ required checks or approvals.
 
 After the version PR merges, the release workflow creates `vX.Y.Z` only after
 all release gates pass, then promotes that immutable release through staging and
-production. It publishes deterministic, checksummed archives:
+production.
 
-- versioned NapCat runtime and self-contained SnowLuma ZIP/TAR.GZ pairs;
-- byte-identical unversioned NapCat and SnowLuma compatibility pairs, including
-  the filenames used by existing installation instructions;
-- a source-complete lite project ZIP/TAR.GZ pair;
-- full Windows x64, Linux x64, and Linux arm64 project ZIP/TAR.GZ pairs with
-  the matching Node.js executable and license;
-- `releaseDownload.zip`, a compatibility alias of the versioned Windows x64
-  full bundle, containing the repository payload (including `.github` CI and
-  environment definitions, tests, source/build/deployment files), both
-  provider outputs, environment examples, and the embedded runtime;
-- per-archive `.sha256` files, aggregate `SHA256SUMS`, generated release notes,
-  and GitHub artifact provenance attestations.
+The release contains **Guardian artifacts**, not a republished SnowLuma binary
+distribution:
 
-Every archive excludes `.git`, dependency trees, local `.env` files,
-credentials, databases, logs, source maps, and generated release directories.
-The lite archive also excludes CI definitions and tests; full archives retain
-those auditable repository files. Run `pnpm run release:verify` against
-assembled assets before publication.
+- versioned NapCat runtime ZIP/TAR.GZ pairs;
+- source-complete lite project ZIP/TAR.GZ pair;
+- full Windows x64, Linux x64, and Linux arm64 Guardian project ZIP/TAR.GZ pairs with matching Node.js runtime;
+- platform-specific `qq-guardian-snowluma-installer-vX.Y.Z-<platform>` integration archives;
+- per-archive `.sha256` files, aggregate `SHA256SUMS`, generated release notes, and provenance attestations.
 
-The bundled native launchers accept an external environment file without
+The SnowLuma integration archives contain Guardian runtime, the installer/supervisor
+scripts, the exact upstream release manifest, and the official asset checksum/size.
+They **do not contain SnowLuma proprietary native binaries**.
+
+The release CI checks the live SnowLuma Release metadata against
+`UPSTREAM-SNOWLUMA.json`, including the official full-package filenames and
+byte sizes and the published SHA-256 digest when GitHub exposes it. The CI does
+not download and republish the upstream binary package.
+
+To obtain a deployable SnowLuma installation:
+
+1. Download the exact FULL package from the official SnowLuma Release.
+2. Download the matching QQ Guardian integration installer.
+3. Run the platform installer with the official package as its explicit input.
+4. The installer verifies the upstream filename, size, SHA-256 and required native layout before installation.
+5. Unattended native installation registers a persistent systemd service on Linux or a Windows Scheduled Task; QR/interactive QQ login remains an operator action.
+
+This separation is intentional because SnowLuma's current EULA places a specific
+authorization boundary on third-party redistribution of its proprietary native
+components.
+
+Every Guardian archive excludes `.git`, dependency trees, local `.env`
+files, credentials, databases, logs, source maps, and generated release
+directories. Run `pnpm run release:verify` against assembled Guardian assets
+before publication.
+
+The native Guardian launchers accept an external environment file without
 executing it as shell code:
 
 ```sh
@@ -70,13 +86,8 @@ deploy/native/start-bundled-guardian.sh /etc/qq-guardian/guardian.env
 ```
 
 ```powershell
-deploy\native\start-bundled-guardian.ps1 -EnvironmentFile C:\ProgramData\QQGuardian\guardian.env
+deploy\\native\\start-bundled-guardian.ps1 -EnvironmentFile C:\ProgramData\QQGuardian\guardian.env
 ```
-
-`QQ_GUARDIAN_ENV_FILE` is also supported. If neither form is supplied, the
-launcher loads `deploy/native/guardian.env` when that file exists. Keep the
-environment file and persistent data outside a replaceable extracted bundle in
-production.
 
 ## Dry run
 
