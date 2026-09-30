@@ -1,5 +1,7 @@
 name: Build and release
 
+# v1.4.9 retry: preserve the same release contract and rebuild from the merged version PR.
+
 on:
   pull_request:
     branches:
