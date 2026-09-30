@@ -93,9 +93,9 @@ function addBundledNode(target, root, targetPlatform) {
   if (!licensePath) throw new Error('Node.js LICENSE not found; pass --node-license=<path>');
   const windows = targetPlatform === 'win-x64';
   target.push(
-    { name: root + '/runtime/node/' + (windows ? 'node.exe' : 'bin/node'), data: readFileSync(binaryPath), mode: windows ? 0o644 : 0o755 },
-    { name: root + '/runtime/node/LICENSE', data: readFileSync(licensePath), mode: 0o644 },
-    { name: root + '/runtime/node/runtime.json', data: Buffer.from(JSON.stringify({node: process.version, platform: targetPlatform}) + '\n', 'utf8'), mode: 0o644 },
+    { name: root + '/' + (windows ? 'node.exe' : 'node'), data: readFileSync(binaryPath), mode: windows ? 0o644 : 0o755 },
+    { name: root + '/LICENSE', data: readFileSync(licensePath), mode: 0o644 },
+    { name: root + '/node-runtime.json', data: Buffer.from(JSON.stringify({node: process.version, platform: targetPlatform}) + '\n', 'utf8'), mode: 0o644 },
   );
 }
 
@@ -148,8 +148,8 @@ function windowsLauncher() {
     '@echo off',
     'setlocal',
     'set "ROOT=%~dp0"',
-    'if exist "%ROOT%runtime\\node\\node.exe" (',
-    '  set "NODE=%ROOT%runtime\\node\\node.exe"',
+    'if exist "%ROOT%node.exe" (',
+    '  set "NODE=%ROOT%node.exe"',
     ') else (',
     '  set "NODE=node"',
     ')',
@@ -165,12 +165,12 @@ function linuxLauncher() {
     '#!/usr/bin/env bash',
     'set -euo pipefail',
     'cd "$(dirname "$0")"',
-    'if [[ -x "./runtime/node/bin/node" ]]; then',
-    '  NODE_BIN="./runtime/node/bin/node"',
+    'if [[ -x "./node" ]]; then',
+    '  NODE_BIN="./node"',
     'else',
     '  NODE_BIN="$(command -v node || true)"',
     '  if [[ -z "$NODE_BIN" ]]; then',
-    '    echo "error: Node.js >=22.13.0 is required and no bundled ./runtime/node/bin/node was found." >&2',
+    '    echo "error: Node.js >=22.13.0 is required and no bundled ./node was found." >&2',
     '    exit 127',
     '  fi',
     'fi',
