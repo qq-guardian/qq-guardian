@@ -1,0 +1,19 @@
+[Unit]
+Description=QQ Guardian with official SnowLuma
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@RUN_USER@
+Group=@RUN_USER@
+WorkingDirectory=@INSTALL_ROOT@
+EnvironmentFile=@ENV_FILE@
+ExecStart=@START_SCRIPT@ @INSTALL_ROOT@ @GUARDIAN_ROOT@ @ENV_FILE@
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
