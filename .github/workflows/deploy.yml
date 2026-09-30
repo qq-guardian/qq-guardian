@@ -210,7 +210,7 @@ jobs:
           asset="qq-guardian-snowluma-${TAG}-linux-x64-lite.tar.gz"
           mkdir -p bundle
           tar -xzf "release-input/$asset" -C bundle
-          bundle_root="$(tar -tzf "release-input/$asset" | head -n 1 | cut -d/ -f1)"
+          bundle_root="$(tar -tzf "release-input/$asset" | sed -n '1p' | cut -d/ -f1)"
           artifact_sha256="$(sha256sum "release-input/$asset" | awk '{print $1}')"
           echo "bundle_path=bundle/$bundle_root" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$asset" >> "$GITHUB_OUTPUT"
