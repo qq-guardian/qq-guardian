@@ -93,15 +93,18 @@ describe('release workflow governance', () => {
     assert.doesNotMatch(release, /\bsleep\b/);
   });
 
-  it('mirrors the SnowLuma platform matrix and emits a complete compatibility ZIP', () => {
-    for (const platform of ['win32-x64', 'linux-x64', 'linux-arm64']) {
-      assert.match(release, new RegExp(`platform: ${platform}`));
+  it('builds the SnowLuma provider platform/flavor matrix without the retired compatibility bundle', () => {
+    for (const platform of ['win-x64', 'linux-x64', 'linux-arm64']) {
+      assert.match(release, new RegExp('platform: ' + platform));
     }
-    assert.match(release, /--compatibility-asset/);
-    assert.match(release, /releaseDownload\.zip|compatibility ZIP/);
-    assert.match(release, /pnpm install --frozen-lockfile/);
-    assert.match(release, /package:providers:versioned/);
-    assert.match(release, /package:project:lite/);
+    assert.match(release, /package-snowluma\.mjs --platform=\$\{\{ matrix\.platform \}\} --flavor=lite/);
+    assert.match(release, /package-snowluma\.mjs --platform=\$\{\{ matrix\.platform \}\} --flavor=full/);
+    assert.match(release, /verify-snowluma-provider-layout\.mjs --directory=release/);
+    assert.doesNotMatch(release, /package-project\.mjs/);
+    assert.doesNotMatch(release, /releaseDownload\.zip/);
+    assert.doesNotMatch(release, /--compatibility-asset/);
+    assert.match(release, /qq-guardian-snowluma-v\*\.zip/);
+    assert.match(release, /qq-guardian-snowluma-v\*\.tar\.gz/);
     assert.match(release, /SHA256SUMS/);
     assert.match(release, /attest-build-provenance@[a-f0-9]{40}/);
   });
@@ -122,7 +125,7 @@ describe('release workflow governance', () => {
     assert.match(release, /source_sha: \$\{\{ needs\.metadata\.outputs\.source_sha \}\}/);
     assert.match(release, /Deployment handoff: a successful publication continues into the promotion job/);
     assert.match(release, /cancel-in-progress: false/);
-    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 2);
+    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
     assert.equal((request.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
   });
 });
