@@ -35,7 +35,11 @@ describe('release archive contract', () => {
         '--platform=linux-x64',
         '--flavor=' + flavor,
         ...(flavor === 'full'
-          ? ['--node-binary=' + process.execPath, '--node-license=' + join(process.execPath, '..', 'LICENSE')]
+          ? (() => {
+              const candidates = [join(process.execPath, '..', 'LICENSE'), join(process.execPath, '..', '..', 'LICENSE')];
+              const license = candidates.find((path) => existsSync(path));
+              return ['--node-binary=' + process.execPath, '--node-license=' + (license ?? (() => { throw new Error('Node.js LICENSE not found'); })())];
+            })()
           : []),
       );
     }
