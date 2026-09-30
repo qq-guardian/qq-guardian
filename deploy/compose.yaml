@@ -21,9 +21,12 @@ services:
     # Keep them scoped to SnowLuma only; Guardian itself remains capability-free.
     cap_add:
       - SYS_PTRACE
+    # Do not set no-new-privileges on SnowLuma: the official image grants
+    # /usr/local/bin/node cap_sys_ptrace via file capabilities. Linux ignores
+    # file capabilities when no_new_privs is set, which would break QQ hook
+    # injection for SnowLuma's non-root runtime. Guardian retains nnp below.
     security_opt:
       - seccomp=unconfined
-      - no-new-privileges:true
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       # Leave empty to use SnowLuma's random first-start noVNC password.
