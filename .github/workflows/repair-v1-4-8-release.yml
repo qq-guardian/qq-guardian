@@ -1,0 +1,112 @@
+name: Repair v1.4.8 release assets
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  repair:
+    if: contains(github.event.head_commit.message, 'repair v1.4.8')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    env:
+      TAG: v1.4.8
+      SOURCE_SHA: e8fb66930698626bef3be2012cbf69d2626ae0d4
+    steps:
+      - name: Check out the immutable v1.4.8 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v1.4.8
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.2
+          cache: pnpm
+
+      - name: Download existing v1.4.8 release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf release
+          mkdir -p release
+          gh release download "$TAG" --dir release
+
+      - name: Install and build the immutable v1.4.8 source
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Recreate immutable deployment input
+        run: pnpm run package:project:full --platform=linux-x64 --compatibility-asset
+
+      - name: Build all SnowLuma integration installers
+        run: |
+          node scripts/package-snowluma-installer.mjs --platform=win-x64 --output-dir=release
+          node scripts/package-snowluma-installer.mjs --platform=linux-x64 --output-dir=release
+          node scripts/package-snowluma-installer.mjs --platform=linux-arm64 --output-dir=release
+
+      - name: Verify and regenerate release checksums
+        run: |
+          node scripts/verify-snowluma-installer.mjs --directory=release
+          node scripts/write-checksums.mjs release
+          node scripts/verify-release-assets.mjs release
+          node scripts/verify-release-layout.mjs --directory=release
+          node scripts/verify-deployment-release.mjs --directory=release --tag="$TAG" --output=deployment-input.json
+
+      - name: Attest the exact immutable deployment archive
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3.2.0
+        with:
+          subject-path: release/releaseDownload.zip
+
+      - name: Upload repaired v1.4.8 release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$TAG" \
+            release/releaseDownload.zip \
+            release/releaseDownload.zip.sha256 \
+            release/qq-guardian-v1.4.8-full-linux-x64.zip \
+            release/qq-guardian-v1.4.8-full-linux-x64.tar.gz \
+            release/qq-guardian-v1.4.8-full-linux-x64.zip.sha256 \
+            release/qq-guardian-v1.4.8-full-linux-x64.tar.gz.sha256 \
+            release/qq-guardian-snowluma-installer-v1.4.8-win-x64.zip \
+            release/qq-guardian-snowluma-installer-v1.4.8-win-x64.zip.sha256 \
+            release/qq-guardian-snowluma-installer-v1.4.8-linux-x64.tar.gz \
+            release/qq-guardian-snowluma-installer-v1.4.8-linux-x64.tar.gz.sha256 \
+            release/qq-guardian-snowluma-installer-v1.4.8-linux-arm64.tar.gz \
+            release/qq-guardian-snowluma-installer-v1.4.8-linux-arm64.tar.gz.sha256 \
+            release/SHA256SUMS \
+            --clobber
+
+      - name: Verify the published v1.4.8 release asset set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$TAG" --dir verify-release
+          node scripts/verify-release-assets.mjs verify-release
+          node scripts/verify-release-layout.mjs --directory=verify-release
+          test -f verify-release/releaseDownload.zip
+          test -f verify-release/qq-guardian-snowluma-installer-v1.4.8-win-x64.zip
+          test -f verify-release/qq-guardian-snowluma-installer-v1.4.8-linux-x64.tar.gz
+          test -f verify-release/qq-guardian-snowluma-installer-v1.4.8-linux-arm64.tar.gz
+
+      - name: Trigger immutable v1.4.8 deployment promotion
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+        run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" -f tag="$TAG" -f source_sha="$SOURCE_SHA"
+
+      - name: Record repair completion
+        run: |
+          echo "Repaired $TAG release assets and dispatched immutable promotion for $SOURCE_SHA"
