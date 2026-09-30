@@ -8,7 +8,7 @@ const archives = readdirSync(directory)
   .filter((name) => name.endsWith('.zip') || name.endsWith('.tar.gz'))
   .sort();
 
-const version = JSON.parse(readFileSync(resolve(directory, 'release-version.json'), 'utf8')).version;
+const version = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')).version;
 const expected = [
   'napcat-plugin-qq-guardian-v' + version + '.zip',
   'napcat-plugin-qq-guardian-v' + version + '.tar.gz',
