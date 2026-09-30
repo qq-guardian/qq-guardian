@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { readTarGzipEntryNames, readZipEntryNames } from './lib/deterministic-zip.mjs';
+import { readTarGzipEntry, readTarGzipEntryNames, readZipEntry, readZipEntryNames } from './lib/deterministic-zip.mjs';
 
 const directory = resolve(arg('--directory') ?? 'release');
 const manifest = JSON.parse(readFileSync(resolve('UPSTREAM-SNOWLUMA.json'), 'utf8'));
@@ -56,16 +56,11 @@ function verify(archivePath) {
   }
 
   const official = manifest.platforms[platform].full;
-  assert.equal(
-    readFileSync(resolve(directory, 'official-snowluma.sha256'), 'utf8').trim(),
-    `${official.sha256}  ${official.file}`,
-    `${name} official checksum contract mismatch`,
-  );
-  assert.equal(
-    readFileSync(resolve(directory, 'official-snowluma.size'), 'utf8').trim(),
-    String(official.size),
-    `${name} official size contract mismatch`,
-  );
+  const readEntry = name.endsWith('.zip') ? readZipEntry : readTarGzipEntry;
+  const checksumText = readEntry(archivePath, `${root}/official-snowluma.sha256`).toString('utf8').trim();
+  const sizeText = readEntry(archivePath, `${root}/official-snowluma.size`).toString('utf8').trim();
+  assert.equal(checksumText, `${official.sha256}  ${official.file}`, `${name} official checksum contract mismatch`);
+  assert.equal(sizeText, String(official.size), `${name} official size contract mismatch`);
 
   if (platform === 'win-x64') {
     assert.ok(set.has('deploy/native/snowluma-install.ps1'));
