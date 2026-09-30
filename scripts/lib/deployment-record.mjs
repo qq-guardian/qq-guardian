@@ -151,7 +151,7 @@ function validateArtifact(value, label, errors) {
     return;
   }
   exactKeys(value, ['name', 'sha256'], label, errors);
-  if (value.name !== 'releaseDownload.zip') errors.push(`${label} name must be releaseDownload.zip`);
+  if (!/^qq-guardian-snowluma-v\d+\.\d+\.\d+-linux-x64-lite\.tar\.gz$/.test(value.name)) errors.push(`${label} name must be the versioned Linux x64 lite SnowLuma provider archive`);
   if (!SHA256.test(value.sha256)) errors.push(`${label} sha256 must be 64 lowercase hexadecimal characters`);
 }
 
