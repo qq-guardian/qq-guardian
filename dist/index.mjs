@@ -1416,7 +1416,7 @@ function buildDefaults() {
       memoryAlertPercent: 90
     },
     update: {
-      githubRepo: "ShiYuPIay/napcat-plugin-qq-guardian",
+      githubRepo: "qq-guardian/qq-guardian",
       autoCheckOnStartup: true
     },
     ai: {
@@ -1437,7 +1437,7 @@ function buildDefaults() {
       enabled: false,
       enforcementMode: "observe",
       feedUrls: [
-        "https://raw.githubusercontent.com/ShiYuPIay/napcat-plugin-qq-guardian/main/intel/feed.json"
+        "https://raw.githubusercontent.com/qq-guardian/qq-guardian/main/intel/feed.json"
       ],
       feedPins: {},
       refreshIntervalSeconds: 300
@@ -9576,7 +9576,7 @@ var plugin_config_schema = [
     type: "string",
     label: "GitHub \u4ED3\u5E93 / GitHub Repo (update check)",
     description: "\u683C\u5F0F \u7528\u6237\u540D/\u4ED3\u5E93\u540D\uFF0C\u6307\u5411\u4F60\u81EA\u5DF1\u7684\u4ED3\u5E93\u624D\u80FD\u68C0\u6D4B\u5230\u4F60\u53D1\u5E03\u7684\u65B0\u7248\u672C / format owner/repo \u2014 point at your own fork to detect your own releases",
-    default: "ShiYuPIay/napcat-plugin-qq-guardian"
+    default: "qq-guardian/qq-guardian"
   }
 ];
 async function plugin_get_config(_ctx) {
@@ -9593,10 +9593,10 @@ async function plugin_get_config(_ctx) {
       intelEnabled: cfg.intel?.enabled ?? false,
       commandsEnabled: cfg.commands?.enabled ?? true,
       commandPrefix: cfg.commands?.prefix ?? "/guard",
-      githubRepo: cfg.update?.githubRepo ?? "ShiYuPIay/napcat-plugin-qq-guardian"
+      githubRepo: cfg.update?.githubRepo ?? "qq-guardian/qq-guardian"
     };
   } catch {
-    return { selfId: "0", defaultApproval: "manual", riskEnabled: true, autoKickBlacklisted: true, riskRecallMessage: false, approvalRealtimeSync: true, useBuiltinApproveKeywords: false, intelEnabled: false, commandsEnabled: true, commandPrefix: "/guard", githubRepo: "ShiYuPIay/napcat-plugin-qq-guardian" };
+    return { selfId: "0", defaultApproval: "manual", riskEnabled: true, autoKickBlacklisted: true, riskRecallMessage: false, approvalRealtimeSync: true, useBuiltinApproveKeywords: false, intelEnabled: false, commandsEnabled: true, commandPrefix: "/guard", githubRepo: "qq-guardian/qq-guardian" };
   }
 }
 async function plugin_set_config(_ctx, config) {
