@@ -63,40 +63,90 @@ SnowLuma
 
 > **安全提示：** 不要把 6081、5099、3000、3001 或 6099 裸露到公网。远程管理请使用 VPN、SSH 隧道，或带身份验证的反向代理。OneBot token、.env、Guardian 的 config.json、SQLite 数据和备份都属于敏感数据。
 
-## 获取并校验 Guardian SnowLuma 发布包
+## 获取并校验官方 SnowLuma + Guardian 集成包
 
-1. 打开 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest)。
-2. 下载 qq-guardian-snowluma.zip 与同名的 .sha256 文件。
-3. 在解压前校验 SHA-256。校验失败时删除下载文件并重新下载，不要继续部署。
+这里必须区分两个发布物：
 
-在 Linux、macOS 或 WSL 中：
+- **SnowLuma 官方 FULL 包**：来自 [SnowLuma 官方 Release](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20)，包含官方 launcher、Node.js runtime、native addons、WebUI 和协议文件。
+- **QQ Guardian integration installer**：来自本仓库，只包含 Guardian runtime、安装器、supervisor、校验清单和部署文档；它不会重新分发 SnowLuma native binaries。
+
+截至本项目当前基准 `v1.14.20`，官方 FULL 包的精确大小是：
+
+| 平台 | 官方文件 | 精确大小 |
+| --- | --- | ---: |
+| Windows x64 | `SnowLuma-v1.14.20-win-x64.zip` | 37,841,306 B |
+| Linux x64 | `SnowLuma-v1.14.20-linux-x64.tar.gz` | 46,367,860 B |
+| Linux arm64 | `SnowLuma-v1.14.20-linux-arm64.tar.gz` | 45,811,604 B |
+
+QQ Guardian 的 integration installer **故意小于这些值**；安装完成后，SnowLuma 安装根目录直接来自官方包本身，而不是 Guardian 重新生成的 SnowLuma 包。
+
+### Linux 原生无人值守安装
+
+先分别取得官方 FULL 包和本仓库对应的 integration installer：
 
 ```bash
-sha256sum -c qq-guardian-snowluma.zip.sha256
-unzip qq-guardian-snowluma.zip -d qq-guardian-snowluma
-cd qq-guardian-snowluma
+sha256sum SnowLuma-v1.14.20-linux-x64.tar.gz
+sha256sum -c qq-guardian-snowluma-installer-v<VERSION>-linux-x64.tar.gz.sha256
+
+tar -xzf qq-guardian-snowluma-installer-v<VERSION>-linux-x64.tar.gz
+cd qq-guardian-snowluma-installer-v<VERSION>-linux-x64
+
+sudo sh deploy/native/snowluma-install.sh \
+  --package /srv/packages/SnowLuma-v1.14.20-linux-x64.tar.gz \
+  --accept-eula \
+  --accept-privacy \
+  --unattended
 ```
 
-在 PowerShell 中：
-
-```powershell
-$archive = '.\qq-guardian-snowluma.zip'
-$expected = (Get-Content "$archive.sha256").Split()[0].ToLowerInvariant()
-$actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-if ($actual -ne $expected) { throw 'SHA-256 校验失败，请重新下载发布包。' }
-Expand-Archive -LiteralPath $archive -DestinationPath '.\qq-guardian-snowluma'
-Set-Location '.\qq-guardian-snowluma'
-```
-
-解压后的根目录必须同时包含：
+安装器会再次验证官方包的**文件名、字节大小、SHA-256 和关键 native 文件**，然后原样复制官方 SnowLuma，并把 Guardian 放在独立的 `qq-guardian/` 子目录：
 
 ```text
-dist-snowluma/    Guardian 独立运行时
-deploy/           Compose、Windows、Linux、Termux 和面板部署资产
-docs/             本教程
+/opt/qq-guardian/snowluma/
+├── index.mjs
+├── launcher.sh
+├── node
+├── native/...
+└── qq-guardian/
+    ├── dist-snowluma/
+    └── start-snowluma-guardian.sh
 ```
 
-不要把 Guardian 的持久化数据放进这个解压目录。发布包可以替换，数据目录和 Docker 卷不能随发布包一起删除。
+无人值守模式会注册并启动 `qq-guardian-snowluma.service`。该服务同时监督 SnowLuma 和 Guardian，任一退出都会结束另一进程，然后由 systemd `Restart=always` 拉起。
+
+### Windows 原生无人值守安装
+
+准备官方：
+
+```text
+SnowLuma-v1.14.20-win-x64.zip
+```
+
+以及：
+
+```text
+qq-guardian-snowluma-installer-v<VERSION>-win-x64.zip
+```
+
+管理员 PowerShell：
+
+```powershell
+Expand-Archive '.\qq-guardian-snowluma-installer-v<VERSION>-win-x64.zip' -DestinationPath '.\qqg-installer'
+Set-Location '.\qqg-installer\qq-guardian-snowluma-installer-v<VERSION>-win-x64'
+
+.\deploy\native\snowluma-install.ps1 \
+  -OfficialPackage 'C:\Packages\SnowLuma-v1.14.20-win-x64.zip' \
+  -AcceptEula \
+  -AcceptPrivacy \
+  -Unattended
+```
+
+安装器会验证官方 ZIP 的精确大小和 SHA-256，然后保持官方 SnowLuma 根目录原样，把 Guardian 放入 `qq-guardian\\`。Windows 使用名为 **QQ Guardian + SnowLuma** 的计划任务在用户登录时启动并监督两个进程。
+
+`-Unattended` / `--unattended` 只表示安装、注册任务和启动过程不需要安装器交互；**QQ 扫码登录以及任何需要人工确认的 QQ 操作仍然需要操作员完成。**
+
+### 发行边界
+
+QQ Guardian 的发布包不包含 SnowLuma proprietary native binaries。SnowLuma 官方 `EULA.md` 对这些组件规定了第三方安装包/自动化部署的授权边界，因此这里采用“**官方包原样 + Guardian overlay**”模型，而不是重新打包一个缩小版 SnowLuma。
 
 ## 推荐路径：Linux Docker Compose 首次部署
 
