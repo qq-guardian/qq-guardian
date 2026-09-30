@@ -63,7 +63,7 @@ function verifyArchive(archivePath) {
     if (!set.has('deploy/native/unattended-start.sh')) throw new Error(name + ' is missing Linux unattended launcher');
   }
 
-  const bundledNode = windows ? set.has('runtime/node/node.exe') : set.has('runtime/node/bin/node');
+  const bundledNode = windows ? set.has('node.exe') : set.has('node');
   if (lite && bundledNode) throw new Error(name + ' lite archive unexpectedly contains bundled Node.js');
   if (!lite && !bundledNode) throw new Error(name + ' full archive is missing bundled Node.js');
 
