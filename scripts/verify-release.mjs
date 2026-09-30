@@ -74,7 +74,7 @@ function verifyProvider(name) {
     ? readTarGzipEntryNames(archivePath)
     : readZipEntryNames(archivePath));
 
-  const root = 'qq-guardian-snowluma-v' + name.match(/^qq-guardian-snowluma-(v\d+\.\d+\.\d+)/)[1];
+  const root = 'qq-guardian-snowluma-' + name.match(/^qq-guardian-snowluma-(v\d+\.\d+\.\d+)/)[1];
   for (const required of [
     root + '/README.md',
     root + '/UPSTREAM-SNOWLUMA.json',
