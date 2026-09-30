@@ -115,7 +115,7 @@ export const plugin_config_schema: PluginConfigSchema = [
     type:        'string',
     label:       'GitHub 仓库 / GitHub Repo (update check)',
     description: '格式 用户名/仓库名，指向你自己的仓库才能检测到你发布的新版本 / format owner/repo — point at your own fork to detect your own releases',
-    default:     'qq-guardian/qq-guardian',
+    default:     'ShiYuPIay/napcat-plugin-qq-guardian',
   },
 ];
 
@@ -134,10 +134,10 @@ export async function plugin_get_config(_ctx: NapCatPluginContext): Promise<Reco
       intelEnabled:        cfg.intel?.enabled         ?? false,
       commandsEnabled:     cfg.commands?.enabled      ?? true,
       commandPrefix:       cfg.commands?.prefix       ?? '/guard',
-      githubRepo:          cfg.update?.githubRepo     ?? 'qq-guardian/qq-guardian',
+      githubRepo:          cfg.update?.githubRepo     ?? 'ShiYuPIay/napcat-plugin-qq-guardian',
     };
   } catch {
-    return { selfId:'0', defaultApproval:'manual', riskEnabled:true, autoKickBlacklisted:true, riskRecallMessage:false, approvalRealtimeSync:true, useBuiltinApproveKeywords:false, intelEnabled:false, commandsEnabled:true, commandPrefix:'/guard', githubRepo:'qq-guardian/qq-guardian' };
+    return { selfId:'0', defaultApproval:'manual', riskEnabled:true, autoKickBlacklisted:true, riskRecallMessage:false, approvalRealtimeSync:true, useBuiltinApproveKeywords:false, intelEnabled:false, commandsEnabled:true, commandPrefix:'/guard', githubRepo:'ShiYuPIay/napcat-plugin-qq-guardian' };
   }
 }
 

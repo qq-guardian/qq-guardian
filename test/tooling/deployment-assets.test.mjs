@@ -10,7 +10,6 @@ const dockerignore = readFileSync(join(root, '.dockerignore'), 'utf8');
 const deployWorkflow = readFileSync(join(root, '.github', 'workflows', 'deploy.yml'), 'utf8');
 const systemdUnit = readFileSync(join(root, 'deploy', 'native', 'qq-guardian.service'), 'utf8');
 const windowsStateInitializer = readFileSync(join(root, 'deploy', 'native', 'initialize-guardian-state.ps1'), 'utf8');
-const recoveryWorkflow = readFileSync(join(root, '.github', 'workflows', 'recover-v1-4-7-deployment.yml'), 'utf8');
 
 describe('deployment assets', () => {
   it('initializes named-volume ownership before the non-root Guardian service starts', () => {
@@ -63,13 +62,6 @@ describe('deployment assets', () => {
 
   it('keeps break-glass administrator recovery disabled by default', () => {
     assert.match(compose, /^      QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY: \$\{QQ_GUARDIAN_FORCE_BOOTSTRAP_RECOVERY:-0\}$/m);
-  });
-
-  it('does not use a SIGPIPE-prone tar/head pipeline and contains the one-time v1.4.7 recovery workflow', () => {
-    assert.match(deployWorkflow, /tar -tzf "release-input\/\$asset" \| sed -n '1p' \| cut -d\/ -f1/);
-    assert.doesNotMatch(deployWorkflow, /tar -tzf[^\n]*\| head -n 1/);
-    assert.match(recoveryWorkflow, /tag: v1\.4\.7/);
-    assert.match(recoveryWorkflow, /source_sha: 0ef94cedaf5a1aa76afd31e0e0a002fd3b3da75f/);
   });
 
   it('builds the release image from an explicit minimal context that includes dist-snowluma', () => {

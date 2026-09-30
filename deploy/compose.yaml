@@ -5,8 +5,8 @@ name: ${COMPOSE_PROJECT_NAME:-qq-guardian}
 # Copy .env.example to .env and pass it with --env-file before first launch.
 services:
   snowluma:
-    # Verified against official SnowLuma v1.14.20. Pin to an immutable digest in production.
-    # Obtain a digest with: docker pull motricseven7/snowluma:1.14.20 && docker inspect --format='{{index .RepoDigests 0}}' motricseven7/snowluma:1.14.20
+    # Pin to an immutable digest in production instead of :latest.
+    # Obtain the digest with: docker pull motricseven7/snowluma:latest && docker inspect --format='{{index .RepoDigests 0}}' motricseven7/snowluma:latest
     # Then set SNOWLUMA_IMAGE=motricseven7/snowluma@sha256:<digest> in your .env.
     # QG-001: SNOWLUMA_IMAGE must be set to a pinned digest in production.
     image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:1.14.20}
