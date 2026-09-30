@@ -1,88 +1,132 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { after, before, describe, it } from 'node:test';
+import { readTarGzipEntryNames, readZipEntryNames } from '../../scripts/lib/deterministic-zip.mjs';
 
-const ROOT = join(import.meta.dirname, '../..');
-const directory = mkdtempSync(join(tmpdir(), 'qq-guardian-release-contract-'));
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const directory = mkdtempSync(join(tmpdir(), 'qq-guardian-complete-release-'));
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-const version = pkg.version;
-
-before(() => run('scripts/build.mjs'));
+const prefix = `qq-guardian-v${pkg.version}`;
+before(() => runScript('scripts/build.mjs'));
 after(() => rmSync(directory, { recursive: true, force: true }));
 
-describe('release archive contract', () => {
-  it('packages deterministic NapCat archives', () => {
-    run('scripts/package-provider-release.mjs', '--output-dir=' + directory);
-    const zip = join(directory, 'napcat-plugin-qq-guardian-v' + version + '.zip');
-    const tar = join(directory, 'napcat-plugin-qq-guardian-v' + version + '.tar.gz');
-    assert.ok(existsSync(zip));
-    assert.ok(existsSync(tar));
-    assert.ok(statSync(zip).size > 0);
-    assert.ok(statSync(tar).size > 0);
-    assertSidecar(zip);
-    assertSidecar(tar);
-  });
-
-  it('packages both SnowLuma flavors with deterministic platform assets', () => {
-    for (const flavor of ['lite', 'full']) {
-      run(
-        'scripts/package-snowluma.mjs',
-        '--output-dir=' + directory,
-        '--platform=linux-x64',
-        '--flavor=' + flavor,
-        ...(flavor === 'full'
-          ? (() => {
-              const candidates = [join(process.execPath, '..', 'LICENSE'), join(process.execPath, '..', '..', 'LICENSE')];
-              const license = candidates.find((path) => existsSync(path));
-              return ['--node-binary=' + process.execPath, '--node-license=' + (license ?? (() => { throw new Error('Node.js LICENSE not found'); })())];
-            })()
-          : []),
-      );
-    }
-
-    const lite = join(directory, 'qq-guardian-snowluma-v' + version + '-linux-x64-lite.tar.gz');
-    const full = join(directory, 'qq-guardian-snowluma-v' + version + '-linux-x64.tar.gz');
-    assert.ok(existsSync(lite));
-    assert.ok(existsSync(full));
-    assert.ok(statSync(full).size > statSync(lite).size);
-    assertSidecar(lite);
-    assertSidecar(full);
-
-    run('scripts/verify-snowluma-provider-layout.mjs', '--directory=' + directory);
-  });
-
-  it('does not package an untracked secret into provider archives', () => {
-    const secret = join(ROOT, 'src', '_release-private-config-fixture.json');
-    writeFileSync(secret, '{"token":"must never enter a release archive"}\n');
+describe('complete release archive contract', () => {
+  it('packages deterministic source-complete lite ZIP and TAR.GZ archives', () => {
+    const untrackedSecret = join(ROOT, 'src', '_release-private-config-fixture.json');
+    writeFileSync(untrackedSecret, '{"token":"must never enter a release archive"}\n');
     try {
-      run(
-        'scripts/package-snowluma.mjs',
-        '--output-dir=' + directory,
-        '--platform=linux-x64',
-        '--flavor=lite',
+      packageProject('--flavor=lite');
+    } finally {
+      rmSync(untrackedSecret, { force: true });
+    }
+    const zip = join(directory, `qq-guardian-v${pkg.version}-lite.zip`);
+    const tar = join(directory, `qq-guardian-v${pkg.version}-lite.tar.gz`);
+    const firstZip = readFileSync(zip);
+    const firstTar = readFileSync(tar);
+    packageProject('--flavor=lite');
+    assert.deepEqual(readFileSync(zip), firstZip);
+    assert.deepEqual(readFileSync(tar), firstTar);
+    assert.deepEqual(readZipEntryNames(zip), readTarGzipEntryNames(tar));
+
+    const relativeNames = readZipEntryNames(zip).map((name) => name.slice(prefix.length + 1));
+    assert.equal(relativeNames.includes('src/_release-private-config-fixture.json'), false);
+    for (const required of [
+      'src/index.ts',
+      'src/snowluma.ts',
+      'dist/index.mjs',
+      'dist/plugin.json',
+      'dist-snowluma/index.mjs',
+      'deploy/.env.example',
+      'deploy/compose.yaml',
+      'deploy/native/guardian.env.example',
+      'docs/deployment/snowluma.md',
+      'scripts/build.mjs',
+      'package.json',
+      'pnpm-lock.yaml',
+    ]) assert.ok(relativeNames.includes(required), `missing ${required}`);
+    assert.equal(relativeNames.some(isForbidden), false);
+    runScript('scripts/verify-release-layout.mjs', `--archive=${zip}`);
+    runScript('scripts/verify-release-layout.mjs', `--archive=${tar}`);
+
+    runScript('scripts/package-provider-release.mjs', `--output-dir=${directory}`);
+    const providerZip = join(directory, `napcat-plugin-qq-guardian-v${pkg.version}.zip`);
+    const providerTar = join(directory, `napcat-plugin-qq-guardian-v${pkg.version}.tar.gz`);
+    assert.deepEqual(readZipEntryNames(providerZip), readTarGzipEntryNames(providerTar));
+    assertSidecar(providerZip);
+    assertSidecar(providerTar);
+    const providerNames = new Set(readZipEntryNames(providerZip));
+    for (const required of ['index.mjs','package.json','plugin.json']) assert.ok(providerNames.has(required), `missing ${required}`);
+
+  });
+
+  it('packages a full runtime and makes releaseDownload.zip mirror it exactly', () => {
+    const binary = join(directory, 'fixture-node');
+    const license = join(directory, 'fixture-node-license');
+    writeFileSync(binary, 'fixture runtime\n');
+    writeFileSync(license, 'fixture license\n');
+    const untrackedSecret = join(ROOT, '_release-secret-fixture.txt');
+    writeFileSync(untrackedSecret, 'must never enter a release archive\n');
+    try {
+      packageProject(
+        '--flavor=full',
+        '--platform=fixture-x64',
+        `--node-binary=${binary}`,
+        `--node-license=${license}`,
+        '--compatibility-asset',
       );
     } finally {
-      rmSync(secret, { force: true });
+      rmSync(untrackedSecret, { force: true });
     }
+    const versioned = join(directory, `qq-guardian-v${pkg.version}-full-fixture-x64.zip`);
+    const compatibility = join(directory, 'releaseDownload.zip');
+    assert.deepEqual(readFileSync(compatibility), readFileSync(versioned));
+    const names = new Set(readZipEntryNames(versioned));
+    assert.ok(names.has(`${prefix}/runtime/node/bin/node`));
+    assert.ok(names.has(`${prefix}/runtime/node/LICENSE`));
+    assert.ok(names.has(`${prefix}/runtime/node/runtime.json`));
+    assert.ok(names.has(`${prefix}/.github/workflows/release.yml`));
+    assert.ok(names.has(`${prefix}/.github/workflows/ci.yml`));
+    assert.ok(names.has(`${prefix}/test/tooling/complete-release-layout.test.mjs`));
+    assert.equal([...names].some((name) => name.includes('/.git/') || name.includes('/node_modules/')), false);
+    assert.equal(names.has(`${prefix}/_release-secret-fixture.txt`), false);
+    assert.equal([...names].some((name) => /(?:^|\/)\.env(?:$|\.)/.test(name) && !name.endsWith('.example')), false);
+    runScript('scripts/verify-release-layout.mjs', `--archive=${versioned}`);
+    runScript('scripts/verify-release-layout.mjs', `--archive=${compatibility}`);
 
-    const manifest = readFileSync(join(directory, 'qq-guardian-snowluma-v' + version + '-linux-x64-lite.tar.gz'));
-    assert.equal(manifest.includes('must never enter a release archive'), false);
+    runScript('scripts/write-checksums.mjs', directory);
+    runScript('scripts/verify-release-assets.mjs', directory);
   });
 });
 
-function assertSidecar(archive) {
-  const digest = createHash('sha256').update(readFileSync(archive)).digest('hex');
-  assert.equal(readFileSync(archive + '.sha256', 'utf8'), digest + '  ' + archive.split('/').at(-1) + '\n');
+function packageProject(...args) {
+  runScript('scripts/package-project.mjs', ...args, `--output-dir=${directory}`);
 }
 
-function run(script, ...args) {
+function assertSidecar(archive) {
+  const digest = createHash('sha256').update(readFileSync(archive)).digest('hex');
+  assert.equal(readFileSync(`${archive}.sha256`, 'utf8'), `${digest}  ${basename(archive)}\n`);
+}
+
+function runScript(script, ...args) {
   const result = spawnSync(process.execPath, [join(ROOT, script), ...args], {
     cwd: ROOT,
     encoding: 'utf8',
   });
-  assert.equal(result.status, 0, script + ' failed:\n' + result.stdout + '\n' + result.stderr);
+  assert.equal(result.status, 0, `${script} failed:\n${result.stdout}\n${result.stderr}`);
+}
+
+function isForbidden(name) {
+  return name.startsWith('.git/')
+    || name.startsWith('.github/')
+    || name.startsWith('test/')
+    || name.startsWith('node_modules/')
+    || name.startsWith('release/')
+    || name.includes('/node_modules/')
+    || /(?:^|\/)\.env$/.test(name)
+    || /\.(?:db|db-shm|db-wal|log|map)$/.test(name);
 }

@@ -40,8 +40,6 @@ const SNOWLUMA_DEPLOYMENT_FILES = new Set([
   'native/start-bundled-guardian.sh',
   'native/start-guardian.ps1',
   'native/start-guardian.sh',
-  'native/unattended-start.ps1',
-  'native/unattended-start.sh',
 ]);
 
 const PROJECT_SOURCE_EXTENSIONS = new Set([

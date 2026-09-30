@@ -93,22 +93,18 @@ describe('release workflow governance', () => {
     assert.doesNotMatch(release, /\bsleep\b/);
   });
 
-  it('builds the SnowLuma provider platform/flavor matrix without the retired compatibility bundle', () => {
+  it('builds SnowLuma integration installers from the official platform matrix', () => {
     for (const platform of ['win-x64', 'linux-x64', 'linux-arm64']) {
       assert.match(release, new RegExp('platform: ' + platform));
     }
-    assert.match(release, /package-snowluma\.mjs --platform=\$\{\{ matrix\.platform \}\} --flavor=lite/);
-    assert.match(release, /package-snowluma\.mjs --platform=\$\{\{ matrix\.platform \}\} --flavor=full/);
-    assert.match(release, /verify-snowluma-provider-layout\.mjs --directory=release/);
-    assert.doesNotMatch(release, /package-project\.mjs/);
-    assert.doesNotMatch(release, /releaseDownload\.zip/);
-    assert.doesNotMatch(release, /--compatibility-asset/);
-    assert.match(release, /qq-guardian-snowluma-v\*\.zip/);
-    assert.match(release, /qq-guardian-snowluma-v\*\.tar\.gz/);
+    assert.match(release, /package-snowluma-installer\.mjs/);
+    assert.match(release, /verify-snowluma-installer\.mjs/);
+    assert.doesNotMatch(release, /package-snowluma\.mjs/);
+    assert.doesNotMatch(release, /qq-guardian-snowluma-v\*\.(?:zip|tar\.gz)/);
+    assert.match(release, /qq-guardian-snowluma-installer-v\*\./);
     assert.match(release, /SHA256SUMS/);
     assert.match(release, /attest-build-provenance@[a-f0-9]{40}/);
   });
-
   it('pins every third-party action and promotes the exact published source without an event loopback', () => {
     for (const workflow of [request, release]) {
       const actionRefs = [...workflow.matchAll(/^\s*uses:\s*([^\s#]+).*$/gm)].map((match) => match[1]);
@@ -125,7 +121,7 @@ describe('release workflow governance', () => {
     assert.match(release, /source_sha: \$\{\{ needs\.metadata\.outputs\.source_sha \}\}/);
     assert.match(release, /Deployment handoff: a successful publication continues into the promotion job/);
     assert.match(release, /cancel-in-progress: false/);
-    assert.equal((release.match(/node-version: 22\.13\.0/g) ?? []).length, 1);
+    assert.equal((release.match(/node-version: 22\.23\.2/g) ?? []).length, 2);
     assert.equal((request.match(/node-version: 22\.23\.2/g) ?? []).length, 1);
   });
 });

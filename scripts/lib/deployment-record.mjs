@@ -12,7 +12,7 @@ export function createImageManifest(input) {
     version: input.version,
     sourceSha: input.sourceSha,
     artifact: {
-      name: input.artifactName ?? `qq-guardian-snowluma-${input.version}-linux-x64-lite.tar.gz`,
+      name: input.artifactName ?? 'releaseDownload.zip',
       sha256: input.artifactSha256,
     },
     image: {
@@ -46,7 +46,7 @@ export function createDeploymentRecord(input) {
     version: input.version,
     sourceSha: input.sourceSha,
     artifact: {
-      name: input.artifactName ?? `qq-guardian-snowluma-${input.version}-linux-x64-lite.tar.gz`,
+      name: input.artifactName ?? 'releaseDownload.zip',
       sha256: input.artifactSha256,
     },
     image: {
@@ -151,7 +151,7 @@ function validateArtifact(value, label, errors) {
     return;
   }
   exactKeys(value, ['name', 'sha256'], label, errors);
-  if (!/^qq-guardian-snowluma-v\d+\.\d+\.\d+-linux-x64-lite\.tar\.gz$/.test(value.name)) errors.push(`${label} name must be the versioned Linux x64 lite SnowLuma provider archive`);
+  if (value.name !== 'releaseDownload.zip') errors.push(`${label} name must be releaseDownload.zip`);
   if (!SHA256.test(value.sha256)) errors.push(`${label} sha256 must be 64 lowercase hexadecimal characters`);
 }
 
