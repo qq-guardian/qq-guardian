@@ -30,7 +30,7 @@ for (const name of archives) {
 }
 
 for (const zipName of archives.filter((name) => name.endsWith('.zip') && name !== 'releaseDownload.zip')) {
-  if (/^qq-guardian-snowluma-installer-v\\d+\\.\\d+\\.\\d+-win-x64\\.zip$/.test(zipName)) continue;
+  if (zipName.includes('qq-guardian-snowluma-installer-') && zipName.endsWith('-win-x64.zip')) continue;
   const stem = zipName.slice(0, -4);
   const tarName = `${stem}.tar.gz`;
   if (!archives.includes(tarName)) throw new Error(`Missing TAR.GZ peer for ${zipName}`);
