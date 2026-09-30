@@ -5,11 +5,11 @@ name: ${COMPOSE_PROJECT_NAME:-qq-guardian}
 # Copy .env.example to .env and pass it with --env-file before first launch.
 services:
   snowluma:
-    # Pin to an immutable digest in production instead of :latest.
-    # Obtain the digest with: docker pull motricseven7/snowluma:latest && docker inspect --format='{{index .RepoDigests 0}}' motricseven7/snowluma:latest
+    # Verified against official SnowLuma v1.14.20. Pin to an immutable digest in production.
+    # Obtain a digest with: docker pull motricseven7/snowluma:1.14.20 && docker inspect --format='{{index .RepoDigests 0}}' motricseven7/snowluma:1.14.20
     # Then set SNOWLUMA_IMAGE=motricseven7/snowluma@sha256:<digest> in your .env.
     # QG-001: SNOWLUMA_IMAGE must be set to a pinned digest in production.
-    image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:latest}
+    image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:1.14.20}
     restart: unless-stopped
     shm_size: ${SNOWLUMA_SHM_SIZE:-1gb}
     ulimits:
@@ -31,6 +31,8 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       # Leave empty to use SnowLuma's random first-start noVNC password.
       VNC_PASSWD: ${VNC_PASSWD:-}
+      SNOWLUMA_ACCEPT_EULA: ${SNOWLUMA_ACCEPT_EULA:-}
+      SNOWLUMA_ACCEPT_PRIVACY: ${SNOWLUMA_ACCEPT_PRIVACY:-}
       SNOWLUMA_ONEBOT_HOST: 0.0.0.0
       SNOWLUMA_UID: ${SNOWLUMA_UID:-1000}
       SNOWLUMA_GID: ${SNOWLUMA_GID:-1000}

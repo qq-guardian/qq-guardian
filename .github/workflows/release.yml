@@ -142,21 +142,22 @@ jobs:
           pnpm run verify:manifests
           git diff --exit-code -- dist
 
-      - name: Package provider runtimes and source-complete lite bundle
-        run: |
-          pnpm run package:providers:versioned
-          pnpm run package:project:lite
+      - name: Package public NapCat provider
+        run: pnpm run package:providers:versioned
 
       - name: Upload common immutable assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-common-${{ steps.commit.outputs.sha }}
-          path: release/
+          path: |
+            release/napcat-plugin-qq-guardian-v*.zip
+            release/napcat-plugin-qq-guardian-v*.tar.gz
+            release/napcat-plugin-qq-guardian-v*.sha256
           if-no-files-found: error
           retention-days: 7
 
   full-bundles:
-    name: full-${{ matrix.platform }}
+    name: provider-${{ matrix.platform }}
     needs:
       - metadata
       - quality
@@ -165,7 +166,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            platform: win32-x64
+            platform: win-x64
           - os: ubuntu-latest
             platform: linux-x64
           - os: ubuntu-24.04-arm
@@ -187,7 +188,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.23.2
+          node-version: 22.13.0
           cache: pnpm
 
       - name: Install and build from the frozen lockfile
@@ -195,7 +196,10 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: Package full Windows bundle and compatibility ZIP
+      - name: Package SnowLuma lite provider
+        run: node scripts/package-snowluma.mjs --platform=${{ matrix.platform }} --flavor=lite
+
+      - name: Package SnowLuma full provider on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -204,9 +208,9 @@ jobs:
             Where-Object { $_.Name -match '^LICENSE' } |
             Select-Object -First 1 -ExpandProperty FullName
           if (-not $licensePath) { throw 'Node.js LICENSE was not found beside the configured runtime' }
-          node scripts/package-project.mjs --flavor=full --platform=${{ matrix.platform }} --node-binary="$nodePath" --node-license="$licensePath" --compatibility-asset
+          node scripts/package-snowluma.mjs --platform=${{ matrix.platform }} --flavor=full --node-binary="$nodePath" --node-license="$licensePath"
 
-      - name: Package full Linux bundle
+      - name: Package SnowLuma full provider on Linux
         if: runner.os != 'Windows'
         shell: bash
         run: |
@@ -219,16 +223,19 @@ jobs:
             echo 'Node.js LICENSE was not found beside the configured runtime' >&2
             exit 1
           fi
-          node scripts/package-project.mjs --flavor=full --platform=${{ matrix.platform }} --node-binary="$node_path" --node-license="$license_path"
+          node scripts/package-snowluma.mjs --platform=${{ matrix.platform }} --flavor=full --node-binary="$node_path" --node-license="$license_path"
 
-      - name: Verify complete bundle layout
-        run: node scripts/verify-release-layout.mjs --directory=release
+      - name: Verify SnowLuma provider layout
+        run: node scripts/verify-snowluma-provider-layout.mjs --directory=release
 
       - name: Upload platform bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-full-${{ matrix.platform }}-${{ github.run_id }}
-          path: release/
+          path: |
+            release/qq-guardian-snowluma-v*.zip
+            release/qq-guardian-snowluma-v*.tar.gz
+            release/qq-guardian-snowluma-v*.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -262,7 +269,7 @@ jobs:
         run: |
           node scripts/write-checksums.mjs release
           node scripts/verify-release-assets.mjs release
-          node scripts/verify-release-layout.mjs --directory=release
+          node scripts/verify-snowluma-provider-layout.mjs --directory=release
 
       - name: Attest exact release assets
         uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v3.2.0

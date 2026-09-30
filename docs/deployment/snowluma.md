@@ -63,40 +63,48 @@ SnowLuma
 
 > **安全提示：** 不要把 6081、5099、3000、3001 或 6099 裸露到公网。远程管理请使用 VPN、SSH 隧道，或带身份验证的反向代理。OneBot token、.env、Guardian 的 config.json、SQLite 数据和备份都属于敏感数据。
 
-## 获取并校验 Guardian SnowLuma 发布包
+## 获取并校验 Guardian provider 与官方 SnowLuma
 
-1. 打开 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest)。
-2. 下载 qq-guardian-snowluma.zip 与同名的 .sha256 文件。
-3. 在解压前校验 SHA-256。校验失败时删除下载文件并重新下载，不要继续部署。
+QQ Guardian 与官方 SnowLuma 是两个独立发行项目。Guardian 的 provider release 不替代、复制或重新分发官方 SnowLuma 的专有 native 二进制。
 
-在 Linux、macOS 或 WSL 中：
+官方 SnowLuma v1.14.20：
+- Windows x64 full：SnowLuma-v1.14.20-win-x64.zip
+- Windows x64 lite：SnowLuma-v1.14.20-win-x64-lite.zip
+- Linux x64 full：SnowLuma-v1.14.20-linux-x64.tar.gz
+- Linux x64 lite：SnowLuma-v1.14.20-linux-x64-lite.tar.gz
+- Linux arm64 full：SnowLuma-v1.14.20-linux-arm64.tar.gz
+- Linux arm64 lite：SnowLuma-v1.14.20-linux-arm64-lite.tar.gz
 
-```bash
-sha256sum -c qq-guardian-snowluma.zip.sha256
-unzip qq-guardian-snowluma.zip -d qq-guardian-snowluma
-cd qq-guardian-snowluma
-```
+先从官方 [SnowLuma Releases](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20) 获取与你的平台匹配的官方包。
 
-在 PowerShell 中：
+Guardian 的最新正式包从 [QQ Guardian Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 获取。
 
-```powershell
-$archive = '.\qq-guardian-snowluma.zip'
+Guardian vX.Y.Z provider release 也按同一 platform + full/lite 矩阵发布：
+- Windows：ZIP
+- Linux：TAR.GZ
+- full：自带 Node.js
+- lite：使用系统 Node.js 22.13+（23 系需要 23.4+）
+
+下载 Guardian provider 后先校验 SHA-256。示例：
+
+Linux：
+\`\`\`bash
+sha256sum -c qq-guardian-snowluma-vX.Y.Z-linux-x64-lite.tar.gz.sha256
+tar -xzf qq-guardian-snowluma-vX.Y.Z-linux-x64-lite.tar.gz
+\`\`\`
+
+PowerShell：
+\`\`\`powershell
+$archive = '.\qq-guardian-snowluma-vX.Y.Z-win-x64-lite.zip'
 $expected = (Get-Content "$archive.sha256").Split()[0].ToLowerInvariant()
 $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
-if ($actual -ne $expected) { throw 'SHA-256 校验失败，请重新下载发布包。' }
+if ($actual -ne $expected) { throw 'SHA-256 校验失败。' }
 Expand-Archive -LiteralPath $archive -DestinationPath '.\qq-guardian-snowluma'
-Set-Location '.\qq-guardian-snowluma'
-```
+\`\`\`
 
-解压后的根目录必须同时包含：
+provider 包中包含 Guardian 的 provider runtime、部署资产、Docker Compose 配置和无人值守启动脚本；它不包含官方 SnowLuma 的 snowluma-*.node、snowluma-*.dll、snowluma-*.so。
 
-```text
-dist-snowluma/    Guardian 独立运行时
-deploy/           Compose、Windows、Linux、Termux 和面板部署资产
-docs/             本教程
-```
-
-不要把 Guardian 的持久化数据放进这个解压目录。发布包可以替换，数据目录和 Docker 卷不能随发布包一起删除。
+不要把 Guardian 数据放进发布包目录。发布包可以替换，数据卷和配置目录不能随发布包删除。
 
 ## 推荐路径：Linux Docker Compose 首次部署
 
@@ -290,7 +298,7 @@ http://127.0.0.1:6099/plugin/napcat-plugin-qq-guardian/page/guardian
 1. 按 SnowLuma 的 [原生 Windows 教程](https://snowluma.github.io/en/docs/guide/deploy/windows) 安装 NTQQ，并从 SnowLuma Releases 下载与 Windows x64 对应的发布包。完整包自带 Node；轻量包需要 Node.js >=22.13.0（23 系需要 23.4.0+）。
 2. 启动 QQ 和 SnowLuma，扫码登录 QQ，在 http://127.0.0.1:5099/ 登录 SnowLuma WebUI。
 3. 按本教程的 [配置 SnowLuma OneBot WebSocket](#配置-snowluma-onebot-websocket) 创建或确认 wsServers 的 Universal 条目和 token。
-4. 解压 qq-guardian-snowluma.zip 到固定的应用目录，例如 C:\QQGuardian\app。Guardian 独立服务需要系统 PATH 中的 Node.js >=22.6.0；不要假设 SnowLuma 打包的 Node 会自动提供给 Guardian。
+4. 解压匹配的 Guardian Windows x64 provider 到固定的应用目录，例如 C:\QQGuardian\app。lite 模式需要系统 Node.js >=22.13.0；full provider 会携带 Guardian 自己的 Node runtime。官方 SnowLuma runtime 与 Guardian provider runtime 彼此独立。
 5. 以管理员 PowerShell 创建并收紧 Guardian 状态目录。将下面的身份替换为实际运行 Guardian 的 Windows 账号：
 
    ```powershell
@@ -406,7 +414,7 @@ Android 路线是实验性的。SnowLuma 官方明确指出：proot 环境不具
 5. 使用启动器运行：
 
    ```sh
-   sh deploy/native/start-guardian.sh /实际路径/guardian.env /实际路径/dist-snowluma/index.mjs
+   sh deploy/native/unattended-start.sh /实际路径/官方-SnowLuma目录 /实际路径/dist-snowluma/index.mjs /实际路径/guardian.env
    ```
 
 6. 需要长期运行时，按设备情况使用 termux-wake-lock、关闭电池优化并做好外部备份。设备休眠、厂商后台限制、QQ 更新或 ptrace 限制都可能中断服务。

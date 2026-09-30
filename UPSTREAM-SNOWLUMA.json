@@ -1,0 +1,28 @@
+{
+  "project": "SnowLuma/SnowLuma",
+  "officialRelease": "v1.14.20",
+  "releaseUrl": "https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.20",
+  "distributionPolicy": "external-official-release",
+  "nativeBinariesRedistributed": false,
+  "platforms": {
+    "win-x64": {
+      "full": "SnowLuma-v1.14.20-win-x64.zip",
+      "lite": "SnowLuma-v1.14.20-win-x64-lite.zip"
+    },
+    "linux-x64": {
+      "full": "SnowLuma-v1.14.20-linux-x64.tar.gz",
+      "lite": "SnowLuma-v1.14.20-linux-x64-lite.tar.gz"
+    },
+    "linux-arm64": {
+      "full": "SnowLuma-v1.14.20-linux-arm64.tar.gz",
+      "lite": "SnowLuma-v1.14.20-linux-arm64-lite.tar.gz"
+    }
+  },
+  "unattended": {
+    "acceptanceEnvironment": [
+      "SNOWLUMA_ACCEPT_EULA=1",
+      "SNOWLUMA_ACCEPT_PRIVACY=1"
+    ],
+    "note": "These variables are passed only to an operator-supplied official SnowLuma installation. QQ Guardian does not download, copy, or redistribute SnowLuma proprietary native components."
+  }
+}
