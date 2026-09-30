@@ -175,35 +175,46 @@ jobs:
             exit 1
           fi
 
-      - name: Download exact complete release bundle
+      - name: Download exact Linux x64 lite provider
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.metadata.outputs.tag }}
         run: |
+          set -euo pipefail
           mkdir -p release-input
+          asset="qq-guardian-snowluma-${TAG}-linux-x64-lite.tar.gz"
           gh release download "$TAG" --dir release-input \
-            --pattern releaseDownload.zip \
-            --pattern releaseDownload.zip.sha256 \
+            --pattern "$asset" \
+            --pattern "$asset.sha256" \
             --pattern SHA256SUMS
 
-      - name: Verify release attestation
+      - name: Verify provider checksum and attestation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh attestation verify release-input/releaseDownload.zip --repo "$GITHUB_REPOSITORY"
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          asset="qq-guardian-snowluma-${TAG}-linux-x64-lite.tar.gz"
+          actual="$(sha256sum "release-input/$asset" | awk '{print $1}')"
+          expected="$(awk '{print $1}' "release-input/$asset.sha256")"
+          [[ "$actual" == "$expected" ]] || { echo "Provider SHA-256 mismatch" >&2; exit 1; }
+          grep -F "$actual  $asset" release-input/SHA256SUMS >/dev/null
+          gh attestation verify "release-input/$asset" --repo "$GITHUB_REPOSITORY"
 
       - name: Verify and extract immutable build context
         id: release
         env:
           TAG: ${{ needs.metadata.outputs.tag }}
         run: |
-          node scripts/verify-deployment-release.mjs \
-            --directory=release-input --tag="$TAG" --output=deployment-input.json
-          unzip -q release-input/releaseDownload.zip -d bundle
-          bundle_root="$(node -p "require('./deployment-input.json').bundleRoot")"
-          artifact_sha256="$(node -p "require('./deployment-input.json').artifact.sha256")"
+          set -euo pipefail
+          asset="qq-guardian-snowluma-${TAG}-linux-x64-lite.tar.gz"
+          mkdir -p bundle
+          tar -xzf "release-input/$asset" -C bundle
+          bundle_root="$(tar -tzf "release-input/$asset" | head -n 1 | cut -d/ -f1)"
+          artifact_sha256="$(sha256sum "release-input/$asset" | awk '{print $1}')"
           echo "bundle_path=bundle/$bundle_root" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$asset" >> "$GITHUB_OUTPUT"
           echo "artifact_sha256=$artifact_sha256" >> "$GITHUB_OUTPUT"
-
       - name: Prepare minimal Guardian image build context
         id: image-context
         if: steps.existing.outputs.reuse != 'true'
@@ -274,6 +285,7 @@ jobs:
 
       - name: Reconcile immutable image manifest
         env:
+          DEPLOYMENT_ARTIFACT_NAME: ${{ steps.release.outputs.artifact_name }}
           DEPLOYMENT_ARTIFACT_SHA256: ${{ steps.release.outputs.artifact_sha256 }}
           DEPLOYMENT_FINISHED_AT: ${{ steps.timestamp.outputs.value }}
           DEPLOYMENT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
@@ -299,7 +311,7 @@ jobs:
           const expected = {
             version: process.env.DEPLOYMENT_VERSION,
             sourceSha: process.env.DEPLOYMENT_SOURCE_SHA,
-            artifactName: 'releaseDownload.zip',
+            artifactName: process.env.DEPLOYMENT_ARTIFACT_NAME,
             artifactSha256: process.env.DEPLOYMENT_ARTIFACT_SHA256,
             imageReference: process.env.DEPLOYMENT_IMAGE_REFERENCE,
             imageDigest: process.env.DEPLOYMENT_IMAGE_DIGEST,
