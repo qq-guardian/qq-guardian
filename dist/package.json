@@ -1,7 +1,7 @@
 {
   "name": "napcat-plugin-qq-guardian",
   "plugin": "QQ Guardian",
-  "version": "1.4.5",
+  "version": "1.4.6",
   "type": "module",
   "main": "index.mjs",
   "description": "NapCat QQ group guardian plugin — group approvals, captcha, risk detection, blacklist, audit log, WebUI",
