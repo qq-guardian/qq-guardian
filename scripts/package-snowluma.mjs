@@ -153,8 +153,8 @@ function windowsLauncher() {
     ') else (',
     '  set "NODE=node"',
     ')',
-    '%NODE% "%ROOT%check-node-version.cjs" || exit /b %errorlevel%',
-    '%NODE% "%ROOT%dist-snowluma\\index.mjs" %*',
+    '"%NODE%" "%ROOT%check-node-version.cjs" || exit /b %errorlevel%',
+    '"%NODE%" "%ROOT%dist-snowluma\\index.mjs" %*',
     'exit /b %errorlevel%',
     '',
   ].join('\n');
