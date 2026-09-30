@@ -12,7 +12,7 @@ export function createImageManifest(input) {
     version: input.version,
     sourceSha: input.sourceSha,
     artifact: {
-      name: input.artifactName ?? 'releaseDownload.zip',
+      name: input.artifactName ?? `qq-guardian-snowluma-${input.version}-linux-x64-lite.tar.gz`,
       sha256: input.artifactSha256,
     },
     image: {
