@@ -17,8 +17,6 @@ config
 *.db-shm
 *.db-wal
 *.log
-dist-snowluma
-dist-snowluma/**
 webui
 src
 docs
