@@ -6,7 +6,7 @@
 
 QQ Guardian 是一个面向 QQ 群管理的安全守护工具。它可作为 NapCat 插件运行，也可作为独立 OneBot v11 服务与 SnowLuma 配合运行；两种方式使用相同的业务模型和 WebUI，并支持迁移既有群规与 SQLite 业务数据。
 
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.6.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](LICENSE)
 [![NapCat](https://img.shields.io/badge/NapCat-Plugin-orange)](https://github.com/NapNeko/NapCatQQ)
 [![SnowLuma](https://img.shields.io/badge/SnowLuma-OneBot%20v11-6D5DFB)](https://snowluma.github.io/)
@@ -125,9 +125,9 @@ Windows 和 Linux 原生安装器均支持 `--unattended` / `-Unattended`：安�
 发布包面向最终用户，不需要额外安装依赖。只有从源码开发时才需要 Node.js `>=22.13.0` 与 pnpm 10.28.0：
 
 ```bash
-corepack pnpm@10.17.1 install --frozen-lockfile
-corepack pnpm@10.17.1 run build
-corepack pnpm@10.17.1 test
+corepack pnpm@10.28.0 install --frozen-lockfile
+corepack pnpm@10.28.0 run build
+corepack pnpm@10.28.0 test
 ```
 
 ## 文档与许可
