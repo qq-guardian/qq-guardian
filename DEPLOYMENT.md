@@ -22,7 +22,7 @@ logs.
 SnowLuma's own release model similarly builds platform archives from a
 validated runtime layout and publishes platform-specific assets. QQ Guardian
 uses that model as an engineering reference without redistributing SnowLuma's
-proprietary native components. citeturn0search0turn0search6
+proprietary native components.
 
 ## Local production build
 
@@ -92,7 +92,7 @@ ln -sfn ~/.local/opt/qq-guardian/releases/vX.Y.Z ~/.local/opt/qq-guardian/curren
 
 Do **not** use `docker compose down -v` for a normal Docker upgrade; that
 explicitly deletes named volumes. Docker volumes are the persistence boundary
-for container deployments. citeturn1search3
+for container deployments.
 
 ## Docker
 
@@ -117,7 +117,7 @@ only explicit writable data/config/log volumes.
 
 Docker Compose's `include` mechanism is available for modular configurations,
 but the root `docker-compose.yml` is intentionally self-contained so
-`docker compose up -d` is deterministic for this repository. citeturn1search0
+`docker compose up -d` is deterministic for this repository.
 
 ## Security and supply-chain controls
 
@@ -135,7 +135,7 @@ Release workflows:
 GitHub's current artifact-attestation model uses OIDC-backed provenance and
 requires `id-token: write`, `contents: read`, and `attestations: write` for
 binary attestations. Container attestations additionally require
-`packages: write`. citeturn4search0turn4search1
+`packages: write`.
 
 ## SnowLuma boundary
 
@@ -144,4 +144,4 @@ through its configured OneBot transport. This repository does not copy
 SnowLuma native binaries into QQ Guardian release archives.
 
 For the official SnowLuma Docker distribution, see the upstream Docker
-framework and its documented release-artifact consumption model. citeturn0search1
+framework and its documented release-artifact consumption model.
