@@ -11,7 +11,7 @@ const runtime = arg('--runtime') ?? process.execPath;
 const releaseDir = resolve(ROOT, arg('--output-dir') ?? 'release');
 const stage = resolve(ROOT, '.release-stage', requested);
 
-if (!['win-x64', 'linux-x64'].includes(requested)) throw new Error(`Unsupported platform: ${requested}`);
+if (!['win-x64', 'linux-x64', 'linux-arm64'].includes(requested)) throw new Error(`Unsupported platform: ${requested}`);
 if (!existsSync(join(ROOT, 'dist-snowluma', 'index.mjs'))) throw new Error('Run pnpm run build before packaging');
 if (!existsSync(runtime) || !statSync(runtime).isFile()) throw new Error(`Node runtime not found: ${runtime}`);
 
