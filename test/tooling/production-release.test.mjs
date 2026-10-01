@@ -38,6 +38,6 @@ describe('production release packaging', () => {
     assert.equal(existsSync(join(root, 'deploy', 'compose.yaml')), false);
     const production = readFileSync(join(root, 'scripts', 'package-production.mjs'), 'utf8');
     assert.match(production, /QQ_GUARDIAN_NON_INTERACTIVE=1/);
-    assert.match(production, /TARGET="\\$PREFIX\\/releases\\/\\$VERSION"/);
+    assert.equal(production.indexOf('TARGET="$PREFIX/releases/$VERSION"') >= 0, true);
   });
 });
