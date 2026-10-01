@@ -1,5 +1,7 @@
 name: Package Windows
 on:
+  pull_request:
+    branches: [main]
   workflow_call:
     outputs:
       artifact:
