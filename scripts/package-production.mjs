@@ -114,6 +114,7 @@ function arg(name) { return process.argv.find(a => a.startsWith(name + '='))?.sl
 function detectPlatform() {
   if (process.platform === 'win32' && process.arch === 'x64') return 'win-x64';
   if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x64';
+  if (process.platform === 'linux' && process.arch === 'arm64') return 'linux-arm64';
   throw new Error('Supported hosts: Windows x64 or Linux x64');
 }
 function linuxUpdater() {
