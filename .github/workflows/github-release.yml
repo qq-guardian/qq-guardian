@@ -36,9 +36,6 @@ jobs:
     needs: validate-release
     uses: ./.github/workflows/package-linux.yml
   release:
-    needs: [validate-release, windows, linux]
-    uses: ./.github/workflows/package-linux.yml
-  release:
     needs: [windows, linux]
     runs-on: ubuntu-latest
     steps:
