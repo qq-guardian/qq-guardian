@@ -309,7 +309,7 @@ if($env:QQ_GUARDIAN_AUTO_START -ne 'false'){
   Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
   $action=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument ('/c ""'+(Join-Path $current 'launcher.bat')+'""')
   $trigger=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-  $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+  $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal | Out-Null
 }
 & (Join-Path $current 'verify.ps1')
