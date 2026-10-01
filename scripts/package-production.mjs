@@ -116,10 +116,10 @@ function detectPlatform() {
   throw new Error('Supported hosts: Windows x64 or Linux x64');
 }
 function linuxUpdater() {
-  return `#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-ARCHIVE="${1:-}"
+ARCHIVE="\${1:-}"
 [ -n "$ARCHIVE" ] || { echo "Usage: ./update.sh /path/to/qq-guardian-vX.Y.Z-linux-x64.tar.gz" >&2; exit 2; }
 TMP="$ROOT/.update-tmp"
 rm -rf "$TMP"; mkdir -p "$TMP"
@@ -129,16 +129,16 @@ NEW="$TMP"/qq-guardian-v*/
 cp -a "$ROOT/data" "$NEW/data" 2>/dev/null || true
 cp -a "$ROOT/logs" "$NEW/logs" 2>/dev/null || true
 cp -a "$ROOT/config" "$NEW/config" 2>/dev/null || true
-mv "$ROOT" "${ROOT}.previous"
+mv "$ROOT" "\${ROOT}.previous"
 cp -a "$NEW" "$ROOT"
-rm -rf "${ROOT}.previous" "$TMP"
+rm -rf "\${ROOT}.previous" "$TMP"
 echo "Updated successfully; previous state was preserved during the transaction."
 `;
 }
 function linuxInstaller() {
-  return `#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
-PREFIX="${PREFIX:-$HOME/.local/opt/qq-guardian}"
+PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
 mkdir -p "$PREFIX"
 BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$BASE/RELEASE-MANIFEST.json" | head -n1)"
@@ -156,25 +156,25 @@ echo "Run: $PREFIX/current/launcher.sh"
 `;
 }
 function linuxVerify() {
-  return `#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
-ROOT="${1:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+ROOT="\${1:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 for f in launcher.sh app/index.mjs runtime/node/bin/node RELEASE-MANIFEST.json; do [ -e "$ROOT/$f" ] || { echo "Missing $f" >&2; exit 1; }; done
 "$ROOT/runtime/node/bin/node" "$ROOT/app/index.mjs" --version >/dev/null 2>&1 || true
 echo "qq-guardian package layout verified: $ROOT"
 `;
 }
 function linuxUninstall() {
-  return `#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
-PREFIX="${PREFIX:-$HOME/.local/opt/qq-guardian}"
-if [ "${1:-}" = "--purge" ]; then rm -rf "$PREFIX"; echo "Removed application and persistent data."; exit 0; fi
+PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
+if [ "\${1:-}" = "--purge" ]; then rm -rf "$PREFIX"; echo "Removed application and persistent data."; exit 0; fi
 rm -rf "$PREFIX/releases" "$PREFIX/current" "$PREFIX/.update-tmp"
 echo "Removed application versions. Persistent data/config/logs were retained at $PREFIX/data, $PREFIX/config, and $PREFIX/logs."
 `;
 }
 function systemdUnit() {
-  return `[Unit]
+  return String.raw`[Unit]
 Description=QQ Guardian
 After=network-online.target
 Wants=network-online.target
@@ -192,7 +192,7 @@ WantedBy=default.target
 `;
 }
 function winUpdater() {
-  return `$ErrorActionPreference = 'Stop'
+  return String.raw`$ErrorActionPreference = 'Stop'
 param([Parameter(Mandatory=$true)][string]$Archive)
 $root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $tmp = Join-Path $root '.update-tmp'
@@ -210,23 +210,23 @@ Write-Host 'Update completed; data, configuration, and logs were preserved.'
 `;
 }
 function winInstaller() {
-  return `$ErrorActionPreference = 'Stop'
+  return String.raw`$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSCommandPath
 Write-Host "QQ Guardian package is self-contained. Run launcher.bat to start."
 Write-Host "Persistent state is stored in data, configuration in config, logs in logs."
 `;
 }
 function winVerify() {
-  return `$ErrorActionPreference = 'Stop'
+  return String.raw`$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSCommandPath
 foreach ($f in @('launcher.bat','app\\index.mjs','runtime\\node\\node.exe','RELEASE-MANIFEST.json')) { if (-not (Test-Path (Join-Path $root $f))) { throw "Missing $f" } }
 Write-Host "qq-guardian package layout verified: $root"
 `;
 }
 function winUninstall() {
-  return `$ErrorActionPreference = 'Stop'
+  return String.raw`param([switch]$Purge)
+$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSCommandPath
-param([switch]$Purge)
 if ($Purge) { Remove-Item $root -Recurse -Force; Write-Host 'Removed application and persistent state.' }
 else { Write-Host 'Windows portable package: delete application files to uninstall. Data/config/logs are not removed automatically.' }
 `;
