@@ -1,0 +1,50 @@
+name: GitHub Release
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        required: true
+        type: string
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+jobs:
+  windows:
+    uses: ./.github/workflows/package-windows.yml
+  linux:
+    uses: ./.github/workflows/package-linux.yml
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: '*-release'
+          path: release
+          merge-multiple: true
+      - name: Validate assets
+        run: |
+          test -f release/*.zip
+          test -f release/*.tar.gz
+          sha256sum release/*.zip release/*.tar.gz > release/SHA256SUMS.txt
+      - name: Generate provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            release/*.zip
+            release/*.tar.gz
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: |
+            release/*.zip
+            release/*.tar.gz
+            release/SHA256SUMS.txt
+          generate_release_notes: true
