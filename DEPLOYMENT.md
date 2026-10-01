@@ -12,6 +12,7 @@ Every release publishes:
 
 - `qq-guardian-vX.Y.Z-win-x64.zip`
 - `qq-guardian-vX.Y.Z-linux-x64.tar.gz`
+- `qq-guardian-vX.Y.Z-linux-arm64.tar.gz`
 - `SHA256SUMS.txt`
 - GitHub artifact provenance attestations
 
@@ -26,7 +27,7 @@ proprietary native components.
 
 ## Local production build
 
-Requirements: Node.js 22.13+ and pnpm 10.17.1.
+Requirements: Node.js 22.13+ and pnpm 10.28.0.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -37,8 +38,34 @@ pnpm build
 pnpm release
 ```
 
-On Windows x64, `pnpm release` creates the Windows archive. On Linux x64 it
-creates the Linux archive. CI creates both on their native runners.
+On Windows x64, `pnpm release` creates the Windows archive. On Linux x64 or
+Linux arm64 it creates the matching Linux archive. CI builds Windows x64,
+Linux x64, and Linux arm64 on native runners.
+
+## Windows installation
+
+A released Windows x64 archive can be installed without Node.js or pnpm:
+
+```powershell
+PowerShell -ExecutionPolicy Bypass -File .\install.ps1 -Yes
+.\verify.ps1
+```
+
+The default installation root is:
+
+```text
+%LOCALAPPDATA%\QQGuardian\
+├── current -> releases\<version>
+├── releases\
+├── data\
+├── config\
+└── logs\
+```
+
+The unattended installer registers a per-user scheduled task named
+`QQ Guardian` unless `QQ_GUARDIAN_AUTO_START=false`. Normal uninstall removes
+application versions and the scheduled task while preserving data, configuration,
+and logs; `-Purge` removes the persistent state as well.
 
 ## Linux installation
 
