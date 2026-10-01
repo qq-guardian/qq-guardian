@@ -83,6 +83,7 @@ else writeFileSync(join(stage, 'install.ps1'), install);
 
 writeFileSync(join(stage, requested === 'win-x64' ? 'verify.ps1' : 'verify.sh'), requested === 'win-x64' ? winVerify() : linuxVerify(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
 writeFileSync(join(stage, requested === 'win-x64' ? 'uninstall.ps1' : 'uninstall.sh'), requested === 'win-x64' ? winUninstall() : linuxUninstall(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
+writeFileSync(join(stage, requested === 'win-x64' ? 'rollback.ps1' : 'rollback.sh'), requested === 'win-x64' ? winRollback() : linuxRollback(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
 if (requested === 'linux-x64') {
   mkdirSync(join(stage, 'service'), { recursive: true });
   writeFileSync(join(stage, 'service', 'qq-guardian.service'), systemdUnit());
@@ -173,6 +174,27 @@ rm -rf "$PREFIX/releases" "$PREFIX/current" "$PREFIX/.update-tmp"
 echo "Removed application versions. Persistent data/config/logs were retained at $PREFIX/data, $PREFIX/config, and $PREFIX/logs."
 `;
 }
+function linuxRollback() {
+  return String.raw`#!/bin/sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PREVIOUS="${ROOT}.previous"
+[ -d "$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
+mv "$ROOT" "${ROOT}.failed"
+mv "$PREVIOUS" "$ROOT"
+rm -rf "${ROOT}.failed"
+"$ROOT/verify.sh"
+echo "Rolled back to the previous package."
+`;
+}
+function winRollback() {
+  return String.raw`param([Parameter(Mandatory=$true)][string]$PreviousDirectory)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSCommandPath
+if (-not (Test-Path $PreviousDirectory)) { throw "Previous package not found: $PreviousDirectory" }
+Write-Host "Restore $PreviousDirectory over $root after stopping the Guardian process, then run verify.ps1."
+`;
+}
 function systemdUnit() {
   return String.raw`[Unit]
 Description=QQ Guardian
@@ -204,6 +226,8 @@ foreach ($name in @('data','config','logs')) {
   $old = Join-Path $root $name; $dest = Join-Path $new.FullName $name
   if (Test-Path $old) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item $old $dest -Recurse -Force }
 }
+if (Test-Path (Join-Path $root '.previous')) { Remove-Item (Join-Path $root '.previous') -Recurse -Force }
+Copy-Item $root (Join-Path $root '.previous') -Recurse -Force
 Get-ChildItem $new.FullName | ForEach-Object { Copy-Item $_.FullName $root -Recurse -Force }
 Remove-Item $tmp -Recurse -Force
 Write-Host 'Update completed; data, configuration, and logs were preserved.'
