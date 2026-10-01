@@ -261,10 +261,23 @@ Write-Host 'Update completed; data, configuration, and logs were preserved.'
 `;
 }
 function winInstaller() {
-  return String.raw`$ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSCommandPath
-Write-Host "QQ Guardian package is self-contained. Run launcher.bat to start."
-Write-Host "Persistent state is stored in data, configuration in config, logs in logs."
+  return String.raw`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+$ErrorActionPreference='Stop'
+if (-not $Yes -and $env:QQ_GUARDIAN_NON_INTERACTIVE -ne '1') { throw 'Non-interactive install requires -Yes or QQ_GUARDIAN_NON_INTERACTIVE=1.' }
+$base=Split-Path -Parent $PSCommandPath
+$manifest=Get-Content (Join-Path $base 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
+$version='v'+$manifest.version
+$releases=Join-Path $Prefix 'releases'
+$target=Join-Path $releases $version
+New-Item -ItemType Directory -Force -Path $releases,(Join-Path $Prefix 'data'),(Join-Path $Prefix 'config'),(Join-Path $Prefix 'logs') | Out-Null
+if(Test-Path $target){Remove-Item $target -Recurse -Force}
+Copy-Item $base $target -Recurse -Force
+foreach($name in @('data','config','logs')){ $dest=Join-Path $target $name; if(Test-Path $dest){Remove-Item $dest -Recurse -Force}; New-Item -ItemType Junction -Path $dest -Target (Join-Path $Prefix $name) | Out-Null }
+$current=Join-Path $Prefix 'current'
+if(Test-Path $current){Remove-Item $current -Force}
+New-Item -ItemType Junction -Path $current -Target $target | Out-Null
+& (Join-Path $current 'verify.ps1')
+Write-Host "Installed QQ Guardian $version at $current"
 `;
 }
 function winVerify() {
