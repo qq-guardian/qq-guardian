@@ -38,6 +38,10 @@ describe('production release packaging', () => {
     const production = readFileSync(join(root, 'scripts', 'package-production.mjs'), 'utf8');
     assert.match(production, /QQ_GUARDIAN_NON_INTERACTIVE=1/);
     assert.equal(production.indexOf('TARGET="$PREFIX/releases/$VERSION"') >= 0, true);
+    assert.equal(production.includes('sort -Vr'), true);
+    assert.equal(production.includes("source: 'provided-runtime'"), true);
+    const releaseWorkflow = readFileSync(join(root, '.github/workflows/github-release.yml'), 'utf8');
+    assert.equal(releaseWorkflow.includes('release/*.sha256'), true);
     assert.equal(production.includes('linux-arm64'), true);
     assert.equal(production.includes('Register-ScheduledTask'), true);
     assert.equal(production.includes('Sort-Object { [version]$_.Name.TrimStart(\'v\') }'), true);
