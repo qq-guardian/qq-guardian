@@ -47,6 +47,18 @@ jobs:
           pattern: '*-release'
           path: release
           merge-multiple: true
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - name: Build NapCat plugin asset
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm exec node scripts/package.mjs
       - name: Validate assets
         run: |
           ls release/*.zip >/dev/null
