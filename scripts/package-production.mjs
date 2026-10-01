@@ -214,8 +214,8 @@ WantedBy=default.target
 `;
 }
 function winUpdater() {
-  return String.raw`$ErrorActionPreference = 'Stop'
-param([Parameter(Mandatory=$true)][string]$Archive)
+  return String.raw`param([Parameter(Mandatory=$true)][string]$Archive)
+$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 $tmp = Join-Path $root '.update-tmp'
 if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
@@ -226,9 +226,9 @@ foreach ($name in @('data','config','logs')) {
   $old = Join-Path $root $name; $dest = Join-Path $new.FullName $name
   if (Test-Path $old) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item $old $dest -Recurse -Force }
 }
-\$previous = "\$root.previous"
-if (Test-Path \$previous) { Remove-Item \$previous -Recurse -Force }
-Copy-Item \$root \$previous -Recurse -Force
+$previous = "$root.previous"
+if (Test-Path $previous) { Remove-Item $previous -Recurse -Force }
+Copy-Item $root $previous -Recurse -Force
 Get-ChildItem $new.FullName | ForEach-Object { Copy-Item $_.FullName $root -Recurse -Force }
 Remove-Item $tmp -Recurse -Force
 Write-Host 'Update completed; data, configuration, and logs were preserved.'
