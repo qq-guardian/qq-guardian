@@ -1,18 +1,34 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { verifyCiGovernance } from './lib/ci-governance.mjs';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const errors = verifyCiGovernance({
-  workflow: readFileSync(join(root, '.github', 'workflows', 'ci.yml'), 'utf8'),
-  dependabot: readFileSync(join(root, '.github', 'dependabot.yml'), 'utf8'),
-  packageJson: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')),
-});
-
-if (errors.length > 0) {
-  errors.forEach((error) => console.error(`✗ ${error}`));
-  process.exit(1);
+const root = process.cwd();
+const required = [
+  '.github/workflows/build.yml',
+  '.github/workflows/test.yml',
+  '.github/workflows/build-native.yml',
+  '.github/workflows/package-windows.yml',
+  '.github/workflows/package-linux.yml',
+  '.github/workflows/docker-release.yml',
+  '.github/workflows/github-release.yml',
+];
+const errors = [];
+for (const path of required) {
+  if (!existsSync(join(root, path))) errors.push(`missing required workflow: ${path}`);
 }
-console.log('✓ CI gates, action pins, security checks, and dependency governance match policy');
+for (const path of required) {
+  if (!existsSync(join(root, path))) continue;
+  const source = readFileSync(join(root, path), 'utf8');
+  if (!source.includes('actions/checkout@v6')) errors.push(`${path}: must use actions/checkout@v6`);
+  if (source.includes('pull_request') && !source.includes('permissions:')) errors.push(`${path}: explicit permissions are required`);
+}
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+for (const [name, command] of Object.entries({
+  'package:production': 'node scripts/package-production.mjs',
+  'release': 'pnpm run package:production',
+  'verify:ci-governance': 'node scripts/verify-ci-governance.mjs',
+})) {
+  if (!String(pkg.scripts?.[name] ?? '').includes(command)) errors.push(`package.json: invalid ${name} script`);
+}
+if (errors.length) { for (const error of errors) console.error(`✗ ${error}`); process.exit(1); }
+console.log('✓ production workflow governance verified');
