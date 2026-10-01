@@ -12,7 +12,27 @@ permissions:
   attestations: write
   id-token: write
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm run test:tooling
+      - run: pnpm run verify:ci-governance
   validate-release:
+    needs: preflight
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,7 +56,7 @@ jobs:
     needs: validate-release
     uses: ./.github/workflows/package-linux.yml
   release:
-    needs: [windows, linux]
+    needs: [preflight, validate-release, windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
