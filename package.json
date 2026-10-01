@@ -45,7 +45,7 @@
     "package:project:lite": "node scripts/package-project.mjs --flavor=lite",
     "package:project:full": "node scripts/package-project.mjs --flavor=full --compatibility-asset",
     "package:providers:versioned": "node scripts/package-provider-release.mjs",
-    "release": "node scripts/release.mjs",
+    "release": "pnpm run package:production && node scripts/verify-production-package.mjs --directory=release",
     "release:prepare": "node scripts/release.mjs --prepare --non-interactive",
     "release:checksums": "node scripts/write-checksums.mjs release",
     "release:verify": "node scripts/verify-release-layout.mjs --directory=release && node scripts/verify-release-assets.mjs release",
@@ -65,7 +65,8 @@
     "test:tooling": "node scripts/run-tests.mjs tooling",
     "test:ci": "node scripts/run-tests.mjs all --reporter=spec",
     "package:snowluma:installer": "node scripts/package-snowluma-installer.mjs --platform=linux-x64",
-    "package:snowluma:verify": "node scripts/verify-snowluma-installer.mjs --directory=release"
+    "package:snowluma:verify": "node scripts/verify-snowluma-installer.mjs --directory=release",
+    "package:production": "tsc --noEmit && node scripts/build.mjs && node scripts/package-production.mjs"
   },
   "main": "dist/index.mjs",
   "dependencies": {

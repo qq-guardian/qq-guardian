@@ -1,7 +1,7 @@
 # BT Panel (Baota) deployment
 
 BT Panel's Docker/Compose application view can run the standard
-[`../compose.yaml`](../compose.yaml) unchanged when the repository layout is
+[`../../docker-compose.yml`](../../docker-compose.yml) unchanged when the repository layout is
 retained. Clone or upload the repository, then select `deploy/compose.yaml` as
 the Compose file so its `..` build context still points at the bundle root.
 

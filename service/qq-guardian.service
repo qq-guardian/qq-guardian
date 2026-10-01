@@ -1,0 +1,15 @@
+[Unit]
+Description=QQ Guardian
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+ExecStart=%h/.local/opt/qq-guardian/current/launcher.sh
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=%h/.local/opt/qq-guardian/data %h/.local/opt/qq-guardian/config %h/.local/opt/qq-guardian/logs
+[Install]
+WantedBy=default.target

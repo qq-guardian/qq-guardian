@@ -1,0 +1,42 @@
+name: Package Windows
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+    outputs:
+      artifact:
+        description: Windows release artifact name
+        value: ${{ jobs.package.outputs.artifact }}
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    outputs:
+      artifact: ${{ steps.meta.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.17.1
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - shell: pwsh
+        run: pnpm exec node scripts/package-production.mjs --platform=win-x64 --runtime="$((Get-Command node).Source)"
+      - shell: pwsh
+        run: pnpm exec node scripts/verify-production-package.mjs --directory=release
+      - id: meta
+        shell: pwsh
+        run: "echo artifact=windows-release >> $env:GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-release
+          path: release/*
+          if-no-files-found: error
+          retention-days: 1

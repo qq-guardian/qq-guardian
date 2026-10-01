@@ -1,0 +1,61 @@
+services:
+  snowluma:
+    image: ${SNOWLUMA_IMAGE:-motricseven7/snowluma:1.14.20}
+    restart: unless-stopped
+    shm_size: 1gb
+    ulimits:
+      nofile: {soft: 65536, hard: 1048576}
+    cap_add: [SYS_PTRACE]
+    security_opt: [seccomp=unconfined]
+    environment:
+      TZ: ${TZ:-UTC}
+      SNOWLUMA_WEBUI_HOST: 0.0.0.0
+      SNOWLUMA_WEBUI_PORT: 5099
+      SNOWLUMA_ONEBOT_HOST: 0.0.0.0
+      SNOWLUMA_HOOK_AUTOLOAD: ${SNOWLUMA_HOOK_AUTOLOAD:-1}
+      SNOWLUMA_QQ_FLAGS: ${SNOWLUMA_QQ_FLAGS:---disable-gpu --disable-software-rasterizer --disable-gpu-compositing}
+    ports:
+      - "127.0.0.1:6081:6081"
+      - "127.0.0.1:5099:5099"
+    volumes:
+      - snowluma-data:/app/data
+      - snowluma-config:/app/.config
+      - snowluma-client:/app/.local/share
+  qq-guardian:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${QQ_GUARDIAN_IMAGE:-qq-guardian:local}
+    restart: unless-stopped
+    depends_on:
+      snowluma:
+        condition: service_started
+    environment:
+      TZ: ${TZ:-UTC}
+      QQ_GUARDIAN_HTTP_HOST: 0.0.0.0
+      QQ_GUARDIAN_HTTP_PORT: 6099
+      QQ_GUARDIAN_DATA_DIR: /data
+      QQ_GUARDIAN_CONFIG_DIR: /config
+      SNOWLUMA_WS_URL: ws://snowluma:3001/
+      SNOWLUMA_TRANSPORT: forward-websocket
+      SNOWLUMA_ACCESS_TOKEN: ${SNOWLUMA_ACCESS_TOKEN:-}
+      QQ_GUARDIAN_ACCEPT_LICENSE: ${QQ_GUARDIAN_ACCEPT_LICENSE:-1}
+      QQ_GUARDIAN_NON_INTERACTIVE: ${QQ_GUARDIAN_NON_INTERACTIVE:-1}
+      QQ_GUARDIAN_AUTO_START: ${QQ_GUARDIAN_AUTO_START:-true}
+    ports:
+      - "127.0.0.1:${QQ_GUARDIAN_PORT:-6099}:6099"
+    volumes:
+      - guardian-data:/data
+      - guardian-config:/config
+      - guardian-logs:/logs
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  snowluma-data:
+  snowluma-config:
+  snowluma-client:
+  guardian-data:
+  guardian-config:
+  guardian-logs:
