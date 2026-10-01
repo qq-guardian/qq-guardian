@@ -214,7 +214,7 @@ echo "Rolled back to $(basename "$PREVIOUS")."
 `;
 }
 function winRollback() {
-  return String.raw\`param([string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+  return String.raw`param([string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
 $ErrorActionPreference='Stop'
 $releases=Join-Path $Prefix 'releases'
 if(-not(Test-Path $releases)){throw 'No versioned releases found.'}
@@ -232,7 +232,7 @@ if(Test-Path $current){Remove-Item $current -Force}
 New-Item -ItemType Junction -Path $current -Target $previous.FullName | Out-Null
 & (Join-Path $current 'verify.ps1')
 Write-Host "Rolled back to $($previous.Name)."
-\`;
+`;
 }
 function systemdUnit() {
   return String.raw`[Unit]
@@ -253,7 +253,7 @@ WantedBy=default.target
 `;
 }
 function winUpdater() {
-  return String.raw\`param([Parameter(Mandatory=$true)][string]$Archive,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+  return String.raw`param([Parameter(Mandatory=$true)][string]$Archive,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
 $ErrorActionPreference='Stop'
 if(-not(Test-Path $Archive)){throw "Archive not found: $Archive"}
 $tmp=Join-Path $env:TEMP ("qq-guardian-update-"+[guid]::NewGuid())
@@ -282,10 +282,10 @@ try{
 }finally{
   if(Test-Path $tmp){Remove-Item $tmp -Recurse -Force}
 }
-\`;
+`;
 }
 function winInstaller() {
-  return String.raw\`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+  return String.raw`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
 $ErrorActionPreference='Stop'
 if(-not $Yes -and $env:QQ_GUARDIAN_NON_INTERACTIVE -ne '1'){throw 'Non-interactive install requires -Yes or QQ_GUARDIAN_NON_INTERACTIVE=1.'}
 $base=Split-Path -Parent $PSCommandPath
@@ -314,7 +314,7 @@ if($env:QQ_GUARDIAN_AUTO_START -ne 'false'){
 }
 & (Join-Path $current 'verify.ps1')
 Write-Host "Installed QQ Guardian $version at $current"
-\`;
+`;
 }
 function winVerify() {
   return String.raw`$ErrorActionPreference = 'Stop'
@@ -324,7 +324,7 @@ Write-Host "qq-guardian package layout verified: $root"
 `;
 }
 function winUninstall() {
-  return String.raw\`param([switch]$Purge,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+  return String.raw`param([switch]$Purge,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
 $ErrorActionPreference='Stop'
 Unregister-ScheduledTask -TaskName 'QQ Guardian' -Confirm:$false -ErrorAction SilentlyContinue
 if($Purge){
@@ -337,6 +337,6 @@ $current=Join-Path $Prefix 'current'
 if(Test-Path $current){Remove-Item $current -Force}
 if(Test-Path $releases){Remove-Item $releases -Recurse -Force}
 Write-Host "Removed QQ Guardian application versions. Preserved: $(Join-Path $Prefix 'data'), $(Join-Path $Prefix 'config'), $(Join-Path $Prefix 'logs')"
-\`;
+`;
 }
 
