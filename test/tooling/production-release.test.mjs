@@ -24,7 +24,9 @@ describe('production release packaging', () => {
     const checksum = `${archive}.sha256`;
     assert.equal(existsSync(archive), true);
     assert.equal(existsSync(checksum), true);
-    assert.match(readFileSync(checksum, 'utf8'), /^[a-f0-9]{64}  qq-guardian-v1\.4\.9-linux-x64\.tar\.gz\n$/);
+    const checksumText = readFileSync(checksum, 'utf8');
+    assert.match(checksumText, /^[a-f0-9]{64}  /);
+    assert.equal(checksumText.split('  ')[1], 'qq-guardian-v' + version + '-linux-x64.tar.gz\n');
   });
 
   it('keeps deployment entry points canonical', () => {
@@ -33,5 +35,15 @@ describe('production release packaging', () => {
     }
     assert.equal(existsSync(join(root, 'deploy', 'Dockerfile')), false);
     assert.equal(existsSync(join(root, 'deploy', 'compose.yaml')), false);
+    const production = readFileSync(join(root, 'scripts', 'package-production.mjs'), 'utf8');
+    assert.match(production, /QQ_GUARDIAN_NON_INTERACTIVE=1/);
+    assert.equal(production.indexOf('TARGET="$PREFIX/releases/$VERSION"') >= 0, true);
+    assert.equal(production.includes('linux-arm64'), true);
+    assert.equal(production.includes('Register-ScheduledTask'), true);
+    assert.equal(production.includes('Sort-Object { [version]$_.Name.TrimStart(\'v\') }'), true);
+    const install = readFileSync(join(root, 'install.sh'), 'utf8');
+    const update = readFileSync(join(root, 'update.sh'), 'utf8');
+    assert.equal(install.includes('PLATFORM=linux-arm64'), true);
+    assert.equal(update.includes('PLATFORM=linux-arm64'), true);
   });
 });

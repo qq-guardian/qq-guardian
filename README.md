@@ -6,7 +6,7 @@
 
 QQ Guardian 是一个面向 QQ 群管理的安全守护工具。它可作为 NapCat 插件运行，也可作为独立 OneBot v11 服务与 SnowLuma 配合运行；两种方式使用相同的业务模型和 WebUI，并支持迁移既有群规与 SQLite 业务数据。
 
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.6.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D22.13.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](LICENSE)
 [![NapCat](https://img.shields.io/badge/NapCat-Plugin-orange)](https://github.com/NapNeko/NapCatQQ)
 [![SnowLuma](https://img.shields.io/badge/SnowLuma-OneBot%20v11-6D5DFB)](https://snowluma.github.io/)
@@ -38,7 +38,7 @@ logic; choose the provider that matches the host you already operate.
 
 ### 安装
 
-1. 从 [Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 下载 `napcat-plugin-qq-guardian.zip`。
+1. 从 [GitHub Releases](https://github.com/qq-guardian/qq-guardian/releases/latest) 下载 `napcat-plugin-qq-guardian.zip`。
 2. 在 NapCat 插件目录创建 `napcat-plugin-qq-guardian` 文件夹，并把 ZIP 内容解压到该文件夹。
 3. 在 NapCat 的插件管理界面启用 QQ Guardian，然后按 NapCat 的方式重载或重启。
 
@@ -120,14 +120,14 @@ Windows 和 Linux 原生安装器均支持 `--unattended` / `-Unattended`：安�
 
 ## 开发
 
-维护者发布流程见 [Release operations](docs/operations/release.md)。正式发布除 NapCat/SnowLuma 专用运行包外，还生成包含完整可审计源码、部署资产、环境示例、两个构建目标与匹配 Node.js 运行时的 `releaseDownload.zip`，而不是只打包 `dist/`。
+维护者发布流程见 [Release operations](docs/operations/release.md)。正式 Release 同时发布 NapCat drop-in ZIP，以及 Windows x64、Linux x64、Linux arm64 的自包含生产包；生产包包含匹配的 Node.js runtime、WebUI、配置模板、更新器、校验与平台部署入口，而不是只打包 `dist/`。每个资产同时提供 SHA-256 校验信息。
 
-发布包面向最终用户，不需要额外安装依赖。只有从源码开发时才需要 Node.js `>=22.6.0` 与 pnpm：
+发布包面向最终用户，不需要额外安装依赖。只有从源码开发时才需要 Node.js `>=22.13.0` 与 pnpm 10.28.0：
 
 ```bash
-corepack pnpm@10.17.1 install --frozen-lockfile
-corepack pnpm@10.17.1 run build
-corepack pnpm@10.17.1 test
+corepack pnpm@10.28.0 install --frozen-lockfile
+corepack pnpm@10.28.0 run build
+corepack pnpm@10.28.0 test
 ```
 
 ## 文档与许可
@@ -148,6 +148,7 @@ QQ Guardian publishes self-contained platform archives:
 
 - `qq-guardian-vX.Y.Z-win-x64.zip`
 - `qq-guardian-vX.Y.Z-linux-x64.tar.gz`
+- `qq-guardian-vX.Y.Z-linux-arm64.tar.gz`
 - `SHA256SUMS.txt`
 
 The archives include the application runtime, bundled Node.js, WebUI, launcher,

@@ -12,9 +12,28 @@ permissions:
   attestations: write
   id-token: write
 jobs:
+  validate-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          expected="v$(node -p "require('./package.json').version")"
+          test "$RELEASE_TAG" = "$expected" || {
+            echo "::error::Release tag $RELEASE_TAG does not match package.json version $expected"
+            exit 1
+          }
   windows:
+    needs: validate-release
     uses: ./.github/workflows/package-windows.yml
   linux:
+    needs: validate-release
     uses: ./.github/workflows/package-linux.yml
   release:
     needs: [windows, linux]
@@ -28,10 +47,22 @@ jobs:
           pattern: '*-release'
           path: release
           merge-multiple: true
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.13.0
+          cache: pnpm
+      - name: Build NapCat plugin asset
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+          pnpm exec node scripts/package.mjs
       - name: Validate assets
         run: |
-          test -f release/*.zip
-          test -f release/*.tar.gz
+          ls release/*.zip >/dev/null
+          ls release/*.tar.gz >/dev/null
           sha256sum release/*.zip release/*.tar.gz > release/SHA256SUMS.txt
       - name: Generate provenance
         uses: actions/attest@v4

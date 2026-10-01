@@ -9,7 +9,8 @@ command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 1; }
 [ -n "$VERSION" ] || VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\\([^"]*\\)".*/\\1/p' | head -n1)"
 case "$VERSION" in v*) ;; *) VERSION="v$VERSION";; esac
-ARCHIVE="qq-guardian-$VERSION-linux-x64.tar.gz"
+ARCH="$(uname -m)"; case "$ARCH" in x86_64|amd64) PLATFORM=linux-x64 ;; aarch64|arm64) PLATFORM=linux-arm64 ;; *) echo "Unsupported Linux architecture: $ARCH" >&2; exit 1 ;; esac
+ARCHIVE="qq-guardian-$VERSION-$PLATFORM.tar.gz"
 BASE="https://github.com/$REPO/releases/download/$VERSION"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
