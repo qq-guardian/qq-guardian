@@ -272,9 +272,9 @@ try{
 \`;
 }
 function winInstaller() {
-  return String.raw`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+  return String.raw\`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
 $ErrorActionPreference='Stop'
-if (-not $Yes -and $env:QQ_GUARDIAN_NON_INTERACTIVE -ne '1') { throw 'Non-interactive install requires -Yes or QQ_GUARDIAN_NON_INTERACTIVE=1.' }
+if(-not $Yes -and $env:QQ_GUARDIAN_NON_INTERACTIVE -ne '1'){throw 'Non-interactive install requires -Yes or QQ_GUARDIAN_NON_INTERACTIVE=1.'}
 $base=Split-Path -Parent $PSCommandPath
 $manifest=Get-Content (Join-Path $base 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
 $version='v'+$manifest.version
@@ -283,13 +283,25 @@ $target=Join-Path $releases $version
 New-Item -ItemType Directory -Force -Path $releases,(Join-Path $Prefix 'data'),(Join-Path $Prefix 'config'),(Join-Path $Prefix 'logs') | Out-Null
 if(Test-Path $target){Remove-Item $target -Recurse -Force}
 Copy-Item $base $target -Recurse -Force
-foreach($name in @('data','config','logs')){ $dest=Join-Path $target $name; if(Test-Path $dest){Remove-Item $dest -Recurse -Force}; New-Item -ItemType Junction -Path $dest -Target (Join-Path $Prefix $name) | Out-Null }
+foreach($name in @('data','config','logs')){
+  $dest=Join-Path $target $name
+  if(Test-Path $dest){Remove-Item $dest -Recurse -Force}
+  New-Item -ItemType Junction -Path $dest -Target (Join-Path $Prefix $name) | Out-Null
+}
 $current=Join-Path $Prefix 'current'
 if(Test-Path $current){Remove-Item $current -Force}
 New-Item -ItemType Junction -Path $current -Target $target | Out-Null
+if($env:QQ_GUARDIAN_AUTO_START -ne 'false'){
+  $taskName='QQ Guardian'
+  Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+  $action=New-ScheduledTaskAction -Execute 'cmd.exe' -Argument ('/c ""'+(Join-Path $current 'launcher.bat')+'""')
+  $trigger=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+  $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
+  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal | Out-Null
+}
 & (Join-Path $current 'verify.ps1')
 Write-Host "Installed QQ Guardian $version at $current"
-`;
+\`;
 }
 function winVerify() {
   return String.raw`$ErrorActionPreference = 'Stop'
