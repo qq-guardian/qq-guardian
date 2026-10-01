@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 
 const root = join(process.cwd());
 const script = join(root, 'scripts');
+const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const output = mkdtempSync(join(tmpdir(), 'qq-guardian-release-'));
 
 function run(name, args) {
@@ -20,7 +20,7 @@ describe('production release packaging', () => {
     run('build.mjs', []);
     run('package-production.mjs', [`--platform=linux-x64`, `--runtime=${process.execPath}`, `--output-dir=${output}`]);
     run('verify-production-package.mjs', [`--directory=${output}`]);
-    const archive = join(output, 'qq-guardian-v1.4.9-linux-x64.tar.gz');
+    const archive = join(output, `qq-guardian-v${version}-linux-x64.tar.gz`);
     const checksum = `${archive}.sha256`;
     assert.equal(existsSync(archive), true);
     assert.equal(existsSync(checksum), true);
