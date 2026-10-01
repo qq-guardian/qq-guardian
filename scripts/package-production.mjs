@@ -140,18 +140,31 @@ function linuxInstaller() {
   return String.raw`#!/bin/sh
 set -eu
 PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
-mkdir -p "$PREFIX"
+YES=0
+[ "${1:-}" = "--yes" ] && YES=1
+[ "${QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
 BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$BASE/RELEASE-MANIFEST.json" | head -n1)"
+[ -n "$VERSION" ] || { echo "Missing release version" >&2; exit 1; }
+VERSION="v$VERSION"
+if [ "$YES" -ne 1 ] && [ -t 0 ]; then
+  printf 'Install qq-guardian %s at %s? [y/N] ' "$VERSION" "$PREFIX"
+  read -r answer
+  case "$answer" in y|Y|yes|YES) ;; *) echo "Installation cancelled."; exit 1;; esac
+elif [ "$YES" -ne 1 ]; then
+  echo "Non-interactive install requires --yes or QQ_GUARDIAN_NON_INTERACTIVE=1." >&2
+  exit 2
+fi
+mkdir -p "$PREFIX/releases" "$PREFIX/data" "$PREFIX/config" "$PREFIX/logs"
 TARGET="$PREFIX/releases/$VERSION"
-mkdir -p "$PREFIX/releases"
 rm -rf "$TARGET"
 cp -a "$BASE"/. "$TARGET"/
-mkdir -p "$PREFIX/data" "$PREFIX/config" "$PREFIX/logs"
-[ -e "$TARGET/data" ] && rm -rf "$TARGET/data"; ln -s "$PREFIX/data" "$TARGET/data"
-[ -e "$TARGET/config" ] && rm -rf "$TARGET/config"; ln -s "$PREFIX/config" "$TARGET/config"
-[ -e "$TARGET/logs" ] && rm -rf "$TARGET/logs"; ln -s "$PREFIX/logs" "$TARGET/logs"
+rm -rf "$TARGET/data" "$TARGET/config" "$TARGET/logs"
+ln -s "$PREFIX/data" "$TARGET/data"
+ln -s "$PREFIX/config" "$TARGET/config"
+ln -s "$PREFIX/logs" "$TARGET/logs"
 ln -sfn "$TARGET" "$PREFIX/current"
+"$PREFIX/current/verify.sh"
 echo "Installed qq-guardian $VERSION at $PREFIX/current"
 echo "Run: $PREFIX/current/launcher.sh"
 `;
@@ -177,14 +190,17 @@ echo "Removed application versions. Persistent data/config/logs were retained at
 function linuxRollback() {
   return String.raw`#!/bin/sh
 set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-PREVIOUS="${ROOT}.previous"
-[ -d "$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
-mv "$ROOT" "${ROOT}.failed"
-mv "$PREVIOUS" "$ROOT"
-rm -rf "${ROOT}.failed"
-"$ROOT/verify.sh"
-echo "Rolled back to the previous package."
+PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
+RELEASES="$PREFIX/releases"
+[ -d "$RELEASES" ] || { echo "No versioned releases found." >&2; exit 1; }
+CURRENT="$(readlink -f "$PREFIX/current" 2>/dev/null || true)"
+PREVIOUS="$(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d | sort | while read -r candidate; do
+  [ "$candidate" = "$CURRENT" ] || { echo "$candidate"; break; }
+done)"
+[ -n "$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
+ln -sfn "$PREVIOUS" "$PREFIX/current"
+"$PREFIX/current/verify.sh"
+echo "Rolled back to $(basename "$PREVIOUS")."
 `;
 }
 function winRollback() {
