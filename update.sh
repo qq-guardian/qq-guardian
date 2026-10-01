@@ -10,7 +10,8 @@ CURRENT="$PREFIX/current"
 [ -x "$CURRENT/updater/update.sh" ] || { echo "Installed updater not found: $CURRENT/updater/update.sh" >&2; exit 1; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-NAME="qq-guardian-$VERSION-linux-x64.tar.gz"
+ARCH="$(uname -m)"; case "$ARCH" in x86_64|amd64) PLATFORM=linux-x64 ;; aarch64|arm64) PLATFORM=linux-arm64 ;; *) echo "Unsupported Linux architecture: $ARCH" >&2; exit 1 ;; esac
+NAME="qq-guardian-$VERSION-$PLATFORM.tar.gz"
 BASE="https://github.com/$REPO/releases/download/$VERSION"
 curl -fsSL "$BASE/$NAME" -o "$TMP/$NAME"
 curl -fsSL "$BASE/$NAME.sha256" -o "$TMP/$NAME.sha256"
