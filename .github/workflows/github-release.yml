@@ -97,5 +97,6 @@ jobs:
           files: |
             release/*.zip
             release/*.tar.gz
+            release/*.sha256
             release/SHA256SUMS.txt
           generate_release_notes: true
