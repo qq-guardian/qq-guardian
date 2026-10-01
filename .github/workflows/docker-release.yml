@@ -1,5 +1,7 @@
 name: Docker Release
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,12 +33,13 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.IMAGE }}:${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
             ${{ env.IMAGE }}:latest
       - name: Attest image
+        if: github.event_name != 'pull_request'
         uses: actions/attest@v4
         with:
           subject-name: ${{ env.IMAGE }}
