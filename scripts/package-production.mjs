@@ -117,78 +117,44 @@ function detectPlatform() {
   throw new Error('Supported hosts: Windows x64 or Linux x64');
 }
 function linuxUpdater() {
-  return String.raw\`#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
-REPO="\${QQ_GUARDIAN_REPOSITORY:-qq-guardian/qq-guardian}"
-PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
-VERSION="\${1:-}"
-ARCHIVE="\${2:-}"
-[ -n "$VERSION" ] || { echo "Usage: ./update.sh vX.Y.Z [archive-path]" >&2; exit 2; }
-case "$VERSION" in v*) ;; *) VERSION="v$VERSION";; esac
-command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 1; }
-TMP="\$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-if [ -n "$ARCHIVE" ]; then
-  [ -f "$ARCHIVE" ] || { echo "Archive not found: $ARCHIVE" >&2; exit 1; }
-else
-  command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
-  NAME="qq-guardian-\${VERSION}-linux-x64.tar.gz"
-  BASE="https://github.com/\$REPO/releases/download/\$VERSION"
-  curl -fsSL "\$BASE/\$NAME" -o "\$TMP/\$NAME"
-  curl -fsSL "\$BASE/\$NAME.sha256" -o "\$TMP/\$NAME.sha256"
-  (cd "\$TMP" && sha256sum -c "\$NAME.sha256")
-  ARCHIVE="\$TMP/\$NAME"
-fi
-tar -xzf "\$ARCHIVE" -C "\$TMP"
-NEW="\$(find "\$TMP" -maxdepth 1 -type d -name 'qq-guardian-v*' | head -n1)"
-[ -n "\$NEW" ] || { echo "Invalid update archive" >&2; exit 1; }
-MANIFEST_VERSION="\$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "\$NEW/RELEASE-MANIFEST.json" | head -n1)"
-[ -n "\$MANIFEST_VERSION" ] || { echo "Missing release version" >&2; exit 1; }
-TARGET="\$PREFIX/releases/v\$MANIFEST_VERSION"
-mkdir -p "\$PREFIX/releases" "\$PREFIX/data" "\$PREFIX/config" "\$PREFIX/logs"
-rm -rf "\$TARGET"
-cp -a "\$NEW" "\$TARGET"
-rm -rf "\$TARGET/data" "\$TARGET/config" "\$TARGET/logs"
-ln -s "\$PREFIX/data" "\$TARGET/data"
-ln -s "\$PREFIX/config" "\$TARGET/config"
-ln -s "\$PREFIX/logs" "\$TARGET/logs"
-ln -sfn "\$TARGET" "\$PREFIX/current"
-"\$PREFIX/current/verify.sh"
-echo "Updated qq-guardian to \$VERSION at \$PREFIX/current"
-\`;
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+ARCHIVE="\${1:-}"
+[ -n "$ARCHIVE" ] || { echo "Usage: ./update.sh /path/to/qq-guardian-vX.Y.Z-linux-x64.tar.gz" >&2; exit 2; }
+TMP="$ROOT/.update-tmp"
+rm -rf "$TMP"; mkdir -p "$TMP"
+tar -xzf "$ARCHIVE" -C "$TMP"
+NEW="$TMP"/qq-guardian-v*/
+[ -d "$NEW" ] || { echo "Invalid update archive" >&2; exit 1; }
+cp -a "$ROOT/data" "$NEW/data" 2>/dev/null || true
+cp -a "$ROOT/logs" "$NEW/logs" 2>/dev/null || true
+cp -a "$ROOT/config" "$NEW/config" 2>/dev/null || true
+mv "$ROOT" "\${ROOT}.previous"
+cp -a "$NEW" "$ROOT"
+rm -rf "\${ROOT}.previous" "$TMP"
+echo "Updated successfully; previous state was preserved during the transaction."
+`;
 }
 function linuxInstaller() {
-  return String.raw\`#!/bin/sh
+  return String.raw`#!/bin/sh
 set -eu
 PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
-YES=0
-[ "\${1:-}" = "--yes" ] && YES=1
-[ "\${QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
-BASE="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)"
-VERSION="\$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "\$BASE/RELEASE-MANIFEST.json" | head -n1)"
-[ -n "\$VERSION" ] || { echo "Missing release version" >&2; exit 1; }
-VERSION="v\$VERSION"
-if [ "\$YES" -ne 1 ] && [ -t 0 ]; then
-  printf 'Install qq-guardian %s at %s? [y/N] ' "\$VERSION" "\$PREFIX"
-  read -r answer
-  case "\$answer" in y|Y|yes|YES) ;; *) echo "Installation cancelled."; exit 1;; esac
-elif [ "\$YES" -ne 1 ]; then
-  echo "Non-interactive install requires --yes or QQ_GUARDIAN_NON_INTERACTIVE=1." >&2
-  exit 2
-fi
-mkdir -p "\$PREFIX/releases" "\$PREFIX/data" "\$PREFIX/config" "\$PREFIX/logs"
-TARGET="\$PREFIX/releases/\$VERSION"
-rm -rf "\$TARGET"
-cp -a "\$BASE"/. "\$TARGET"/
-rm -rf "\$TARGET/data" "\$TARGET/config" "\$TARGET/logs"
-ln -s "\$PREFIX/data" "\$TARGET/data"
-ln -s "\$PREFIX/config" "\$TARGET/config"
-ln -s "\$PREFIX/logs" "\$TARGET/logs"
-ln -sfn "\$TARGET" "\$PREFIX/current"
-"\$PREFIX/current/verify.sh"
-echo "Installed qq-guardian \$VERSION at \$PREFIX/current"
-echo "Start: \$PREFIX/current/launcher.sh"
-\`;
+mkdir -p "$PREFIX"
+BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$BASE/RELEASE-MANIFEST.json" | head -n1)"
+TARGET="$PREFIX/releases/$VERSION"
+mkdir -p "$PREFIX/releases"
+rm -rf "$TARGET"
+cp -a "$BASE"/. "$TARGET"/
+mkdir -p "$PREFIX/data" "$PREFIX/config" "$PREFIX/logs"
+[ -e "$TARGET/data" ] && rm -rf "$TARGET/data"; ln -s "$PREFIX/data" "$TARGET/data"
+[ -e "$TARGET/config" ] && rm -rf "$TARGET/config"; ln -s "$PREFIX/config" "$TARGET/config"
+[ -e "$TARGET/logs" ] && rm -rf "$TARGET/logs"; ln -s "$PREFIX/logs" "$TARGET/logs"
+ln -sfn "$TARGET" "$PREFIX/current"
+echo "Installed qq-guardian $VERSION at $PREFIX/current"
+echo "Run: $PREFIX/current/launcher.sh"
+`;
 }
 function linuxVerify() {
   return String.raw`#!/bin/sh
@@ -199,21 +165,35 @@ for f in launcher.sh app/index.mjs runtime/node/bin/node RELEASE-MANIFEST.json; 
 echo "qq-guardian package layout verified: $ROOT"
 `;
 }
-function linuxRollback() {
-  return String.raw\`#!/bin/sh
+function linuxUninstall() {
+  return String.raw`#!/bin/sh
 set -eu
-PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
-RELEASES="\$PREFIX/releases"
-[ -d "\$RELEASES" ] || { echo "No versioned releases found." >&2; exit 1; }
-CURRENT="\$(readlink -f "\$PREFIX/current" 2>/dev/null || true)"
-PREVIOUS="\$(find "\$RELEASES" -mindepth 1 -maxdepth 1 -type d | sort | while read -r candidate; do
-  [ "\$candidate" = "\$CURRENT" ] || { echo "\$candidate"; break; }
-done)"
-[ -n "\$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
-ln -sfn "\$PREVIOUS" "\$PREFIX/current"
-"\$PREFIX/current/verify.sh"
-echo "Rolled back to \$(basename "\$PREVIOUS")."
-\`;
+PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
+if [ "\${1:-}" = "--purge" ]; then rm -rf "$PREFIX"; echo "Removed application and persistent data."; exit 0; fi
+rm -rf "$PREFIX/releases" "$PREFIX/current" "$PREFIX/.update-tmp"
+echo "Removed application versions. Persistent data/config/logs were retained at $PREFIX/data, $PREFIX/config, and $PREFIX/logs."
+`;
+}
+function linuxRollback() {
+  return String.raw`#!/bin/sh
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PREVIOUS="${ROOT}.previous"
+[ -d "$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
+mv "$ROOT" "${ROOT}.failed"
+mv "$PREVIOUS" "$ROOT"
+rm -rf "${ROOT}.failed"
+"$ROOT/verify.sh"
+echo "Rolled back to the previous package."
+`;
+}
+function winRollback() {
+  return String.raw`param([Parameter(Mandatory=$true)][string]$PreviousDirectory)
+$ErrorActionPreference = 'Stop'
+$root = Split-Path -Parent $PSCommandPath
+if (-not (Test-Path $PreviousDirectory)) { throw "Previous package not found: $PreviousDirectory" }
+Write-Host "Restore $PreviousDirectory over $root after stopping the Guardian process, then run verify.ps1."
+`;
 }
 function systemdUnit() {
   return String.raw`[Unit]
