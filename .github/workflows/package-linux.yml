@@ -11,7 +11,17 @@ permissions:
   contents: read
 jobs:
   package:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-latest
+            artifact: linux-x64-release
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+            artifact: linux-arm64-release
+    runs-on: ${{ matrix.runner }}
     outputs:
       artifact: ${{ steps.meta.outputs.artifact }}
     steps:
@@ -27,13 +37,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
-      - run: pnpm exec node scripts/package-production.mjs --platform=linux-x64 --runtime="$(command -v node)"
+      - run: pnpm exec node scripts/package-production.mjs --platform=${{ matrix.platform }} --runtime="$(command -v node)"
       - run: pnpm exec node scripts/verify-production-package.mjs --directory=release
       - id: meta
-        run: echo "artifact=linux-release" >> "$GITHUB_OUTPUT"
+        run: echo "artifact=${{ matrix.artifact }}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
-          name: linux-release
+          name: ${{ matrix.artifact }}
           path: release/*
           if-no-files-found: error
           retention-days: 1
