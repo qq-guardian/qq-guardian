@@ -140,3 +140,34 @@ corepack pnpm@10.17.1 test
 - [SnowLuma SDK 备用传输说明](docs/architecture/snowluma-sdk-fallback.md)
 - [发布维护流程](docs/operations/release.md)
 - [许可证](LICENSE)
+
+
+## Production releases
+
+QQ Guardian publishes self-contained platform archives:
+
+- `qq-guardian-vX.Y.Z-win-x64.zip`
+- `qq-guardian-vX.Y.Z-linux-x64.tar.gz`
+- `SHA256SUMS.txt`
+
+The archives include the application runtime, bundled Node.js, WebUI, launcher,
+configuration templates, persistent-state directories, updater, verification
+script, uninstall script, and platform service documentation. They are not
+constructed by zipping `dist/` alone.
+
+For Linux, a clean host can install the downloaded archive with:
+
+```sh
+./install.sh --yes
+./verify.sh
+./launcher.sh
+```
+
+For Docker:
+
+```sh
+docker compose up -d
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the production layout, upgrade policy,
+rollback model, Docker security boundary, and release verification process.
