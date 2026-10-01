@@ -214,12 +214,25 @@ echo "Rolled back to $(basename "$PREVIOUS")."
 `;
 }
 function winRollback() {
-  return String.raw`param([Parameter(Mandatory=$true)][string]$PreviousDirectory)
-$ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSCommandPath
-if (-not (Test-Path $PreviousDirectory)) { throw "Previous package not found: $PreviousDirectory" }
-Write-Host "Restore $PreviousDirectory over $root after stopping the Guardian process, then run verify.ps1."
-`;
+  return String.raw\`param([string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+$ErrorActionPreference='Stop'
+$releases=Join-Path $Prefix 'releases'
+if(-not(Test-Path $releases)){throw 'No versioned releases found.'}
+$current=Join-Path $Prefix 'current'
+$currentTarget=''
+if(Test-Path $current){
+  $currentTarget=(Get-Item $current).Target
+}
+$previous=Get-ChildItem $releases -Directory |
+  Sort-Object { [version]$_.Name.TrimStart('v') } -Descending |
+  Where-Object { $_.FullName -ne $currentTarget } |
+  Select-Object -First 1
+if(-not $previous){throw 'No previous package is available.'}
+if(Test-Path $current){Remove-Item $current -Force}
+New-Item -ItemType Junction -Path $current -Target $previous.FullName | Out-Null
+& (Join-Path $current 'verify.ps1')
+Write-Host "Rolled back to $($previous.Name)."
+\`;
 }
 function systemdUnit() {
   return String.raw`[Unit]
