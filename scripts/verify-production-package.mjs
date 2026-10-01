@@ -16,10 +16,10 @@ for (const archive of files) {
   const names = archive.endsWith('.zip') ? readZipEntryNames(archive) : readTarGzipEntryNames(archive);
   const root = names[0]?.split('/')[0];
   if (!root || names.some(n => !n.startsWith(root + '/'))) throw new Error(`Invalid archive root: ${archive}`);
-  for (const required of ['launcher.bat','update.bat','install.ps1','verify.ps1','uninstall.ps1','updater/update.ps1','app/index.mjs','runtime/node/node.exe','config/.env.example','logs/.gitkeep','RELEASE-MANIFEST.json']) {
+  for (const required of ['launcher.bat','update.bat','install.ps1','verify.ps1','uninstall.ps1','rollback.ps1','updater/update.ps1','app/index.mjs','runtime/node/node.exe','config/.env.example','logs/.gitkeep','RELEASE-MANIFEST.json']) {
     if (archive.endsWith('.zip') && !names.includes(root + '/' + required)) throw new Error(`${archive} missing ${required}`);
   }
-  for (const required of ['launcher.sh','update.sh','install.sh','verify.sh','uninstall.sh','updater/update.sh','service/qq-guardian.service','app/index.mjs','runtime/node/bin/node','config/.env.example','logs/.gitkeep','RELEASE-MANIFEST.json']) {
+  for (const required of ['launcher.sh','update.sh','install.sh','verify.sh','uninstall.sh','rollback.sh','updater/update.sh','service/qq-guardian.service','app/index.mjs','runtime/node/bin/node','config/.env.example','logs/.gitkeep','RELEASE-MANIFEST.json']) {
     if (archive.endsWith('.tar.gz') && !names.includes(root + '/' + required)) throw new Error(`${archive} missing ${required}`);
   }
   if (names.some(n => n.includes('node_modules/') || n.includes('.env') && !n.endsWith('.example'))) {
