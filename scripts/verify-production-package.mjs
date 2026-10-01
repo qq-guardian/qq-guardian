@@ -9,7 +9,7 @@ const dir = resolve(ROOT, process.argv.find(a => a.startsWith('--directory='))?.
 if (!existsSync(dir)) throw new Error(`Missing release directory: ${dir}`);
 const files = [
   ...list(/qq-guardian-v\d+\.\d+\.\d+-win-x64\.zip$/),
-  ...list(/qq-guardian-v\d+\.\d+\.\d+-linux-x64\.tar\.gz$/),
+  ...list(/qq-guardian-v\\d+\\.\\d+\\.\\d+-linux-(?:x64|arm64)\\.tar\\.gz$/),
 ];
 if (!files.length) throw new Error('No production archives found');
 for (const archive of files) {
