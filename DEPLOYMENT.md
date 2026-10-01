@@ -10,6 +10,7 @@ and documentation.
 
 Every release publishes:
 
+- `napcat-plugin-qq-guardian.zip`
 - `qq-guardian-vX.Y.Z-win-x64.zip`
 - `qq-guardian-vX.Y.Z-linux-x64.tar.gz`
 - `qq-guardian-vX.Y.Z-linux-arm64.tar.gz`
