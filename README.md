@@ -122,7 +122,7 @@ Windows 和 Linux 原生安装器均支持 `--unattended` / `-Unattended`：安�
 
 维护者发布流程见 [Release operations](docs/operations/release.md)。正式发布除 NapCat/SnowLuma 专用运行包外，还生成包含完整可审计源码、部署资产、环境示例、两个构建目标与匹配 Node.js 运行时的 `releaseDownload.zip`，而不是只打包 `dist/`。
 
-发布包面向最终用户，不需要额外安装依赖。只有从源码开发时才需要 Node.js `>=22.6.0` 与 pnpm：
+发布包面向最终用户，不需要额外安装依赖。只有从源码开发时才需要 Node.js `>=22.13.0` 与 pnpm 10.28.0：
 
 ```bash
 corepack pnpm@10.17.1 install --frozen-lockfile
@@ -148,6 +148,7 @@ QQ Guardian publishes self-contained platform archives:
 
 - `qq-guardian-vX.Y.Z-win-x64.zip`
 - `qq-guardian-vX.Y.Z-linux-x64.tar.gz`
+- `qq-guardian-vX.Y.Z-linux-arm64.tar.gz`
 - `SHA256SUMS.txt`
 
 The archives include the application runtime, bundled Node.js, WebUI, launcher,
