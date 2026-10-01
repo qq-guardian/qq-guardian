@@ -240,25 +240,36 @@ WantedBy=default.target
 `;
 }
 function winUpdater() {
-  return String.raw`param([Parameter(Mandatory=$true)][string]$Archive)
-$ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$tmp = Join-Path $root '.update-tmp'
-if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
-Expand-Archive -LiteralPath $Archive -DestinationPath $tmp -Force
-$new = Get-ChildItem $tmp -Directory | Select-Object -First 1
-if (-not $new) { throw 'Invalid update archive' }
-foreach ($name in @('data','config','logs')) {
-  $old = Join-Path $root $name; $dest = Join-Path $new.FullName $name
-  if (Test-Path $old) { Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue; Copy-Item $old $dest -Recurse -Force }
+  return String.raw\`param([Parameter(Mandatory=$true)][string]$Archive,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+$ErrorActionPreference='Stop'
+if(-not(Test-Path $Archive)){throw "Archive not found: $Archive"}
+$tmp=Join-Path $env:TEMP ("qq-guardian-update-"+[guid]::NewGuid())
+New-Item -ItemType Directory -Path $tmp | Out-Null
+try{
+  Expand-Archive -LiteralPath $Archive -DestinationPath $tmp -Force
+  $new=Get-ChildItem $tmp -Directory | Select-Object -First 1
+  if(-not $new){throw 'Invalid update archive'}
+  $manifest=Get-Content (Join-Path $new.FullName 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
+  $version='v'+$manifest.version
+  $releases=Join-Path $Prefix 'releases'
+  $target=Join-Path $releases $version
+  New-Item -ItemType Directory -Force -Path $releases,(Join-Path $Prefix 'data'),(Join-Path $Prefix 'config'),(Join-Path $Prefix 'logs') | Out-Null
+  if(Test-Path $target){Remove-Item $target -Recurse -Force}
+  Copy-Item $new.FullName $target -Recurse -Force
+  foreach($name in @('data','config','logs')){
+    $dest=Join-Path $target $name
+    if(Test-Path $dest){Remove-Item $dest -Recurse -Force}
+    New-Item -ItemType Junction -Path $dest -Target (Join-Path $Prefix $name) | Out-Null
+  }
+  $current=Join-Path $Prefix 'current'
+  if(Test-Path $current){Remove-Item $current -Force}
+  New-Item -ItemType Junction -Path $current -Target $target | Out-Null
+  & (Join-Path $current 'verify.ps1')
+  Write-Host "Updated QQ Guardian to $version at $current"
+}finally{
+  if(Test-Path $tmp){Remove-Item $tmp -Recurse -Force}
 }
-$previous = "$root.previous"
-if (Test-Path $previous) { Remove-Item $previous -Recurse -Force }
-Copy-Item $root $previous -Recurse -Force
-Get-ChildItem $new.FullName | ForEach-Object { Copy-Item $_.FullName $root -Recurse -Force }
-Remove-Item $tmp -Recurse -Force
-Write-Host 'Update completed; data, configuration, and logs were preserved.'
-`;
+\`;
 }
 function winInstaller() {
   return String.raw`param([switch]$Yes,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
