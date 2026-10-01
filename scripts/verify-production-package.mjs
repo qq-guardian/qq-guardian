@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readTarGzipEntryNames, readZipEntryNames } from './lib/deterministic-zip.mjs';
@@ -28,6 +28,4 @@ for (const archive of files) {
   console.log(`✓ verified ${archive} (${statSync(archive).size} bytes)`);
 }
 function list(re) { return readdirSafe().filter(n => re.test(n)).map(n => join(dir,n)); }
-function readdirSafe() { return readFileSync(join(ROOT,'package.json'),'utf8') && requireFs().readdirSync(dir); }
-function requireFs() { return requireFsImpl; }
-const requireFsImpl = await import('node:fs');
+function readdirSafe() { return readdirSync(dir); }
