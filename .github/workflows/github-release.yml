@@ -30,8 +30,8 @@ jobs:
           merge-multiple: true
       - name: Validate assets
         run: |
-          test -f release/*.zip
-          test -f release/*.tar.gz
+          ls release/*.zip >/dev/null
+          ls release/*.tar.gz >/dev/null
           sha256sum release/*.zip release/*.tar.gz > release/SHA256SUMS.txt
       - name: Generate provenance
         uses: actions/attest@v4
