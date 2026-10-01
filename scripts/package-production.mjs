@@ -324,10 +324,19 @@ Write-Host "qq-guardian package layout verified: $root"
 `;
 }
 function winUninstall() {
-  return String.raw`param([switch]$Purge)
-$ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSCommandPath
-if ($Purge) { Remove-Item $root -Recurse -Force; Write-Host 'Removed application and persistent state.' }
-else { Write-Host 'Windows portable package: delete application files to uninstall. Data/config/logs are not removed automatically.' }
-`;
+  return String.raw\`param([switch]$Purge,[string]$Prefix="$env:LOCALAPPDATA\\QQGuardian")
+$ErrorActionPreference='Stop'
+Unregister-ScheduledTask -TaskName 'QQ Guardian' -Confirm:$false -ErrorAction SilentlyContinue
+if($Purge){
+  if(Test-Path $Prefix){Remove-Item $Prefix -Recurse -Force}
+  Write-Host 'Removed QQ Guardian, configuration, logs, and data.'
+  exit 0
 }
+$releases=Join-Path $Prefix 'releases'
+$current=Join-Path $Prefix 'current'
+if(Test-Path $current){Remove-Item $current -Force}
+if(Test-Path $releases){Remove-Item $releases -Recurse -Force}
+Write-Host "Removed QQ Guardian application versions. Preserved: $(Join-Path $Prefix 'data'), $(Join-Path $Prefix 'config'), $(Join-Path $Prefix 'logs')"
+\`;
+}
+
