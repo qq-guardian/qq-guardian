@@ -119,21 +119,30 @@ function detectPlatform() {
 function linuxUpdater() {
   return String.raw`#!/bin/sh
 set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
 ARCHIVE="\${1:-}"
 [ -n "$ARCHIVE" ] || { echo "Usage: ./update.sh /path/to/qq-guardian-vX.Y.Z-linux-x64.tar.gz" >&2; exit 2; }
-TMP="$ROOT/.update-tmp"
-rm -rf "$TMP"; mkdir -p "$TMP"
+[ -f "$ARCHIVE" ] || { echo "Archive not found: $ARCHIVE" >&2; exit 1; }
+command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 1; }
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
 tar -xzf "$ARCHIVE" -C "$TMP"
-NEW="$TMP"/qq-guardian-v*/
-[ -d "$NEW" ] || { echo "Invalid update archive" >&2; exit 1; }
-cp -a "$ROOT/data" "$NEW/data" 2>/dev/null || true
-cp -a "$ROOT/logs" "$NEW/logs" 2>/dev/null || true
-cp -a "$ROOT/config" "$NEW/config" 2>/dev/null || true
-mv "$ROOT" "\${ROOT}.previous"
-cp -a "$NEW" "$ROOT"
-rm -rf "\${ROOT}.previous" "$TMP"
-echo "Updated successfully; previous state was preserved during the transaction."
+NEW="$(find "$TMP" -maxdepth 1 -type d -name 'qq-guardian-v*' | head -n1)"
+[ -n "$NEW" ] || { echo "Invalid update archive" >&2; exit 1; }
+MANIFEST_VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$NEW/RELEASE-MANIFEST.json" | head -n1)"
+[ -n "$MANIFEST_VERSION" ] || { echo "Missing release version" >&2; exit 1; }
+VERSION="v$MANIFEST_VERSION"
+TARGET="$PREFIX/releases/$VERSION"
+mkdir -p "$PREFIX/releases" "$PREFIX/data" "$PREFIX/config" "$PREFIX/logs"
+rm -rf "$TARGET"
+cp -a "$NEW"/. "$TARGET"/
+rm -rf "$TARGET/data" "$TARGET/config" "$TARGET/logs"
+ln -s "$PREFIX/data" "$TARGET/data"
+ln -s "$PREFIX/config" "$TARGET/config"
+ln -s "$PREFIX/logs" "$TARGET/logs"
+ln -sfn "$TARGET" "$PREFIX/current"
+"$PREFIX/current/verify.sh"
+echo "Updated qq-guardian to $VERSION at $PREFIX/current"
 `;
 }
 function linuxInstaller() {
