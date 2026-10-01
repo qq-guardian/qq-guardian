@@ -77,14 +77,14 @@ writeFileSync(join(stage, requested === 'win-x64' ? 'update.bat' : 'update.sh'),
 if (requested === 'win-x64') writeFileSync(join(stage, 'updater', 'update.ps1'), winUpdater());
 else writeFileSync(join(stage, 'updater', 'update.sh'), linuxUpdater(), { mode: 0o755 });
 
-const install = requested === 'linux-x64' ? linuxInstaller() : winInstaller();
-if (requested === 'linux-x64') writeFileSync(join(stage, 'install.sh'), install, { mode: 0o755 });
+const install = requested.startsWith('linux-') ? linuxInstaller() : winInstaller();
+if (requested.startsWith('linux-')) writeFileSync(join(stage, 'install.sh'), install, { mode: 0o755 });
 else writeFileSync(join(stage, 'install.ps1'), install);
 
 writeFileSync(join(stage, requested === 'win-x64' ? 'verify.ps1' : 'verify.sh'), requested === 'win-x64' ? winVerify() : linuxVerify(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
 writeFileSync(join(stage, requested === 'win-x64' ? 'uninstall.ps1' : 'uninstall.sh'), requested === 'win-x64' ? winUninstall() : linuxUninstall(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
 writeFileSync(join(stage, requested === 'win-x64' ? 'rollback.ps1' : 'rollback.sh'), requested === 'win-x64' ? winRollback() : linuxRollback(), { mode: requested === 'win-x64' ? 0o644 : 0o755 });
-if (requested === 'linux-x64') {
+if (requested.startsWith('linux-')) {
   mkdirSync(join(stage, 'service'), { recursive: true });
   writeFileSync(join(stage, 'service', 'qq-guardian.service'), systemdUnit());
 }
@@ -104,7 +104,7 @@ const entries = collectArchiveEntries([{ directory: stage, prefix: root }]);
 mkdirSync(releaseDir, { recursive: true });
 const archive = join(releaseDir, requested === 'win-x64'
   ? `qq-guardian-v${pkg.version}-win-x64.zip`
-  : `qq-guardian-v${pkg.version}-linux-x64.tar.gz`);
+  : `qq-guardian-v${pkg.version}-${requested}.tar.gz`);
 if (requested === 'win-x64') writeDeterministicZip({ outputPath: archive, entries });
 else writeDeterministicTarGzip({ outputPath: archive, entries });
 const sidecar = writeSha256Sidecar(archive);
@@ -115,7 +115,7 @@ function detectPlatform() {
   if (process.platform === 'win32' && process.arch === 'x64') return 'win-x64';
   if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x64';
   if (process.platform === 'linux' && process.arch === 'arm64') return 'linux-arm64';
-  throw new Error('Supported hosts: Windows x64 or Linux x64');
+  throw new Error('Supported hosts: Windows x64, Linux x64, or Linux arm64');
 }
 function linuxUpdater() {
   return String.raw`#!/bin/sh
