@@ -151,8 +151,8 @@ function linuxInstaller() {
 set -eu
 PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
 YES=0
-[ "${1:-}" = "--yes" ] && YES=1
-[ "${QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
+[ "\${1:-}" = "--yes" ] && YES=1
+[ "\${QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
 BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$BASE/RELEASE-MANIFEST.json" | head -n1)"
 [ -n "$VERSION" ] || { echo "Missing release version" >&2; exit 1; }
