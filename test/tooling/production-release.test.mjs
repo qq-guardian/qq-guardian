@@ -38,5 +38,12 @@ describe('production release packaging', () => {
     const production = readFileSync(join(root, 'scripts', 'package-production.mjs'), 'utf8');
     assert.match(production, /QQ_GUARDIAN_NON_INTERACTIVE=1/);
     assert.equal(production.indexOf('TARGET="$PREFIX/releases/$VERSION"') >= 0, true);
+    assert.equal(production.includes('linux-arm64'), true);
+    assert.equal(production.includes('Register-ScheduledTask'), true);
+    assert.equal(production.includes('Sort-Object { [version]$_.Name.TrimStart(\'v\') }'), true);
+    const install = readFileSync(join(root, 'install.sh'), 'utf8');
+    const update = readFileSync(join(root, 'update.sh'), 'utf8');
+    assert.equal(install.includes('PLATFORM=linux-arm64'), true);
+    assert.equal(update.includes('PLATFORM=linux-arm64'), true);
   });
 });
