@@ -27,7 +27,6 @@ describe('production release packaging', () => {
     const checksumText = readFileSync(checksum, 'utf8');
     assert.match(checksumText, /^[a-f0-9]{64}  /);
     assert.equal(checksumText.split('  ')[1], 'qq-guardian-v' + version + '-linux-x64.tar.gz\n');
-    assert.match(readFileSync(checksum, 'utf8'), /^[a-f0-9]{64}  qq-guardian-v1\.4\.9-linux-x64\.tar\.gz\n$/);
   });
 
   it('keeps deployment entry points canonical', () => {
