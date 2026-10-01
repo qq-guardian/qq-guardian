@@ -37,7 +37,7 @@ cpSync(runtime, nodeTarget);
 writeFileSync(join(stage, 'runtime', 'node', 'runtime.json'), JSON.stringify({
   provider: 'nodejs.org',
   major: 22,
-  source: 'GitHub Actions setup-node runner',
+  source: 'provided-runtime',
   executable: nodeName
 }, null, 2) + '\n');
 writeFileSync(join(stage, 'logs', '.gitkeep'), '');
@@ -204,7 +204,7 @@ PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
 RELEASES="$PREFIX/releases"
 [ -d "$RELEASES" ] || { echo "No versioned releases found." >&2; exit 1; }
 CURRENT="$(readlink -f "$PREFIX/current" 2>/dev/null || true)"
-PREVIOUS="$(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d | sort | while read -r candidate; do
+PREVIOUS="$(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d | sort -Vr | while read -r candidate; do
   [ "$candidate" = "$CURRENT" ] || { echo "$candidate"; break; }
 done)"
 [ -n "$PREVIOUS" ] || { echo "No previous package is available." >&2; exit 1; }
