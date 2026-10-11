@@ -10,15 +10,34 @@ export const REQUIRED_GATES = Object.freeze([
 ]);
 
 export const REVIEWED_ACTION_PINS = Object.freeze({
-  'actions/checkout': '3d3c42e5aac5ba805825da76410c181273ba90b1',
-  'pnpm/action-setup': 'ea17c68df8912ef543352723c149a84f56e3d413',
-  'actions/setup-node': '820762786026740c76f36085b0efc47a31fe5020',
-  'github/codeql-action/init': '2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',
-  'actions/dependency-review-action': 'a1d282b36b6f3519aa1f3fc636f609c47dddb294',
-  'github/codeql-action/analyze': '2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2',
-  'actions/upload-artifact': '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
-  'actions/download-artifact': '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c',
+  'actions/checkout': 'd23441a48e516b6c34aea4fa41551a30e30af803',
+  'pnpm/action-setup': '0977fd99725f1db4007ccb2928dbb4e90d06cc86',
+  'actions/setup-node': '949feb2413d6458794dcd2491c4babbbce0c15c1',
+  'actions/upload-artifact': 'cf430e030ddbb5b0abf93d22962f4752f3646cd9',
+  'actions/download-artifact': '37930b1c2abaa49bbe596cd826c3c89aef350131',
+  'actions/attest': '1e69f48acb82d1966a394da916b4c1698aa569d6',
+  'softprops/action-gh-release': '3bb12739c298aeb8a4eeaf626c5b8d85266b0e65',
+  'docker/setup-buildx-action': '8d2750c68a42422c14e847fe6c8ac0403b4cbd6f',
+  'docker/login-action': 'c94ce9fb468520275223c153574b00df6fe4bcc9',
+  'docker/build-push-action': '10e90e3645eae34f1e60eeb005ba3a3d33f178e8',
 });
+
+export function verifyActionPins(workflow) {
+  const errors = [];
+  const activeWorkflow = stripYamlComments(workflow);
+  const actionUses = [...activeWorkflow.matchAll(/^\s*(?:-\s*)?uses:\s+([^@\s]+)@([^\s#]+)/gm)];
+  for (const [, action, reference] of actionUses) {
+    if (action.startsWith('./')) continue;
+    if (!/^[0-9a-f]{40}$/.test(reference)) {
+      errors.push(`${action}: action reference must be an immutable 40-character commit SHA`);
+      continue;
+    }
+    const reviewed = REVIEWED_ACTION_PINS[action];
+    if (!reviewed) errors.push(`${action}: action is not in the reviewed pin allowlist`);
+    else if (reference !== reviewed) errors.push(`${action}: action SHA differs from the reviewed pin`);
+  }
+  return errors;
+}
 
 const REVIEWED_JOB_PERMISSIONS = Object.freeze({
   quality: { contents: 'read' },
@@ -64,18 +83,7 @@ export function verifyWorkflow(workflow) {
 
   const actionUses = [...activeWorkflow.matchAll(/^\s*(?:-\s*)?uses:\s+([^@\s]+)@([^\s#]+)/gm)];
   if (actionUses.length === 0) errors.push('workflow contains no actions');
-  for (const [, action, reference] of actionUses) {
-    if (!/^[0-9a-f]{40}$/.test(reference)) {
-      errors.push(`${action}: action reference must be an immutable 40-character commit SHA`);
-      continue;
-    }
-    const reviewed = REVIEWED_ACTION_PINS[action];
-    if (!reviewed) errors.push(`${action}: action is not in the reviewed pin allowlist`);
-    else if (reference !== reviewed) errors.push(`${action}: action SHA differs from the reviewed pin`);
-  }
-  for (const action of Object.keys(REVIEWED_ACTION_PINS)) {
-    if (!actionUses.some((match) => match[1] === action)) errors.push(`missing required action ${action}`);
-  }
+  errors.push(...verifyActionPins(activeWorkflow));
 
   requireRunCommands(jobs, 'quality', [
     'pnpm install --frozen-lockfile',

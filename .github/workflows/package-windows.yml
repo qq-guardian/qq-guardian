@@ -9,11 +9,11 @@ jobs:
   package:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
         with:
           run_install: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.13.0
           cache: pnpm
@@ -24,7 +24,7 @@ jobs:
         run: pnpm exec node scripts/package-production.mjs --platform=win-x64 --runtime="$((Get-Command node).Source)"
       - shell: pwsh
         run: pnpm exec node scripts/verify-production-package.mjs --directory=release
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: windows-release
           path: release/*

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { verifyActionPins } from '../../scripts/lib/ci-governance.mjs';
 
 const root = process.cwd();
 const workflows = [
@@ -27,11 +28,26 @@ describe('production workflow governance', () => {
     ]) assert.equal(existsSync(join(root, path)), false, path);
   });
 
+  it('pins every external workflow Action to a reviewed immutable commit', () => {
+    for (const path of workflows) {
+      const source = readFileSync(join(root, path), 'utf8');
+      assert.deepEqual(verifyActionPins(source), [], path);
+    }
+  });
+
+  it('rejects mutable tags and unreviewed commit SHAs', () => {
+    const mutable = verifyActionPins('steps:\n  - uses: actions/checkout@v6');
+    assert.match(mutable[0] ?? '', /immutable 40-character commit SHA/);
+
+    const unreviewed = verifyActionPins(`steps:\n  - uses: example/action@${'a'.repeat(40)}`);
+    assert.match(unreviewed[0] ?? '', /not in the reviewed pin allowlist/);
+  });
+
   it('uses explicit read-only permissions for validation workflows', () => {
     for (const path of workflows.slice(0, 3)) {
       const source = readFileSync(join(root, path), 'utf8');
       assert.match(source, /permissions:\n  contents: read/);
-      assert.match(source, /actions\/checkout@v6/);
+      assert.match(source, /actions\/checkout@[0-9a-f]{40} # v6/);
     }
   });
 
@@ -43,13 +59,13 @@ describe('production workflow governance', () => {
     assert.match(linux, /workflow_call:/);
     assert.match(release, /uses: \.\/\.github\/workflows\/package-windows\.yml/);
     assert.match(release, /uses: \.\/\.github\/workflows\/package-linux\.yml/);
-    assert.match(release, /actions\/attest@v4/);
+    assert.match(release, /actions\/attest@[0-9a-f]{40} # v4/);
   });
 
   it('keeps Docker publication independent and multi-architecture', () => {
     const source = readFileSync(join(root, '.github/workflows/docker-release.yml'), 'utf8');
     assert.match(source, /platforms: linux\/amd64,linux\/arm64/);
     assert.match(source, /packages: write/);
-    assert.match(source, /actions\/attest@v4/);
+    assert.match(source, /actions\/attest@[0-9a-f]{40} # v4/);
   });
 });
