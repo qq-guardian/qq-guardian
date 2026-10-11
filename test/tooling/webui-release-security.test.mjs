@@ -71,6 +71,7 @@ const labels = {
   viewRelease: 'View release',
   install: (version) => `Install ${version}`,
   noBuildAsset: 'No verified build',
+  installUnsupported: 'Use the standalone updater',
   manageVersions: 'Manage versions',
 };
 
@@ -152,6 +153,28 @@ describe('release WebUI DOM trust boundary', () => {
     assert.equal(selected.downloadUrl, 'https://github.com/owner/repo/releases/download/v1.2.3/plugin.zip');
     assert.equal(selected.checksumUrl, 'https://release-assets.githubusercontent.com/checksum');
     assert.equal(context.pwned, undefined);
+  });
+
+  it('does not offer NapCat ZIP installation to standalone runtimes', () => {
+    const container = createContainer();
+    let updateCalls = 0;
+    view.renderUpdatePanel(container, {
+      current: '1.0.0',
+      canInstall: false,
+      latest: {
+        version: '1.2.3',
+        releaseUrl: 'https://github.com/owner/repo/releases/tag/v1.2.3',
+        downloadUrl: 'https://github.com/owner/repo/releases/download/v1.2.3/plugin.zip',
+        checksumUrl: 'https://github.com/owner/repo/releases/download/v1.2.3/plugin.zip.sha256',
+      },
+    }, labels, {
+      onUpdate: () => { updateCalls += 1; },
+      onManage: () => {},
+    });
+    const nodes = descendants(container);
+    assert.equal(nodes.some((node) => node.className.includes('btn-primary')), false);
+    assert.match(renderedText(container), /Use the standalone updater/);
+    assert.equal(updateCalls, 0);
   });
 
   it('renders hostile row metadata as text and selects by object identity', () => {

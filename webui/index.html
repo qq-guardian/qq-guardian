@@ -348,7 +348,8 @@ const T = {
     // update
     updates:'更新', checking:'检查中…', upToDate:'✅ 当前已是最新版本：v{cur}',
     updateAvailable:'当前版本：v{cur} → 可更新至：v{latest}', installBtn:'安装 v{v}',
-    confirmInstall:'确认安装 v{v}？', updateAppliedMsg:'更新已应用，请重启',
+    confirmInstall:'确认安装 v{v}？安装前会备份现有程序文件。', updateAppliedMsg:'程序文件已安全替换并备份，请在 NapCat 插件管理器中重载 QQ Guardian（或重启 NapCat）以启用更新。',
+    installNapcatOnly:'独立版请使用随发行包提供的更新器。',
     // statistics
     statisticsTitle:'统计', totalApprovals:'审批总数', approvedStat:'已通过', rejectedStat:'已拒绝',
     punishmentsStat:'处罚总数', riskDetections:'风险检测', captchasOk:'验证码通过',
@@ -426,7 +427,8 @@ const T = {
     healthMonitor:'Health Monitor', noData:'No data',
     updates:'Updates', checking:'Checking…', upToDate:'✅ Up to date: v{cur}',
     updateAvailable:'Current: v{cur} → Available: v{latest}', installBtn:'Install v{v}',
-    confirmInstall:'Install v{v}?', updateAppliedMsg:'Update applied, please restart',
+    confirmInstall:'Install v{v}? Existing program files will be backed up first.', updateAppliedMsg:'Program files were replaced and backed up. Reload QQ Guardian in the NapCat plugin manager (or restart NapCat) to activate the update.',
+    installNapcatOnly:'For standalone installs, use the updater included with the release.',
     statisticsTitle:'Statistics', totalApprovals:'Total Approvals', approvedStat:'Approved', rejectedStat:'Rejected',
     punishmentsStat:'Punishments', riskDetections:'Risk Detections', captchasOk:'Captchas OK',
     trendTitle:'30-Day Trend', trendApprovals:'Approvals', trendRisk:'Risk Detections', trendPunish:'Punishments',
@@ -976,15 +978,16 @@ async function loadUpdate() {
     viewRelease: t('viewReleaseBtn'),
     install: version => t('installBtn', {v:version}),
     noBuildAsset: t('noBuildAssetMsg'),
+    installUnsupported: t('installNapcatOnly'),
     manageVersions: t('manageVersionsBtn'),
   }, {
-    onUpdate: release => window.doUpdate(release.version, release.downloadUrl, release.checksumUrl, release.publishedAt),
+    onUpdate: release => window.doUpdate(release.version),
     onManage: window.openVersionModal,
   });
 }
-window.doUpdate = async(v,u,c,p)=>{
+window.doUpdate = async(v)=>{
   if(!confirm(t('confirmInstall',{v})))return;
-  try{await api('/update/download',{method:'POST',body:{version:v,downloadUrl:u,checksumUrl:c,publishedAt:p,releaseNotes:''}});toast(t('updateAppliedMsg'),'success');}catch(e){toast(e.message,'error');}
+  try{await api('/update/install',{method:'POST',body:{version:v}});toast(t('updateAppliedMsg'),'success');}catch(e){toast(e.message,'error');}
 };
 
 // ─── Version Management modal ──────────────────────────────────────────────
@@ -994,7 +997,7 @@ window.doUpdate = async(v,u,c,p)=>{
 // IMPORTANT: search input/tabs are rendered ONCE; only the list+pagination
 // are re-rendered on every interaction, so the search field never loses
 // keyboard focus while typing.
-let _vm = { releases: [], tab: 'stable', search: '', page: 1, pageSize: 8, selected: null, current: '', githubRepo: '' };
+let _vm = { releases: [], tab: 'stable', search: '', page: 1, pageSize: 8, selected: null, current: '', githubRepo: '', canInstall: true };
 
 function vmCompare(version) {
   if (version === _vm.current) return 'current';
@@ -1013,7 +1016,7 @@ window.openVersionModal = async () => {
   $('#modal-overlay').classList.add('open');
   try {
     const data = await api('/update/releases');
-    _vm = { releases: data.releases||[], tab:'stable', search:'', page:1, pageSize:8, selected:null, current:data.current, githubRepo:data.githubRepo };
+    _vm = { releases: data.releases||[], tab:'stable', search:'', page:1, pageSize:8, selected:null, current:data.current, githubRepo:data.githubRepo, canInstall:data.canInstall !== false };
     vmRenderShell();
   } catch(e) {
     $('#modal-body').innerHTML = `<div class="empty">${esc(e.message)}</div>`;
@@ -1104,21 +1107,29 @@ function vmRenderFooter() {
   closeBtn.className = 'btn btn-outline'; closeBtn.textContent = t('cancel'); closeBtn.onclick = closeModal;
   const updateBtn = document.createElement('button');
   updateBtn.className = 'btn btn-primary'; updateBtn.textContent = t('updateToThisVersionBtn');
-  const disabled = !_vm.selected || vmCompare(_vm.selected.version) === 'current';
+  const disabled = !_vm.selected || vmCompare(_vm.selected.version) === 'current' || !_vm.canInstall || !_vm.selected.downloadUrl || !_vm.selected.checksumUrl;
   if (disabled) { updateBtn.disabled = true; updateBtn.style.opacity = '0.5'; updateBtn.style.cursor = 'default'; }
   updateBtn.onclick = async () => {
     if (!_vm.selected) return;
     if (!confirm(t('confirmInstall',{v:_vm.selected.version}))) return;
     try {
-      await api('/update/download', { method:'POST', body: {
-        version: _vm.selected.version, downloadUrl: _vm.selected.downloadUrl, checksumUrl: _vm.selected.checksumUrl,
-        publishedAt: _vm.selected.publishedAt, releaseNotes: '',
-      }});
+      await api('/update/install', { method:'POST', body: { version: _vm.selected.version } });
       closeModal();
       toast(t('updateAppliedMsg'), 'success');
     } catch(e) { toast(e.message, 'error'); }
   };
   $('#modal-footer').appendChild(closeBtn);
+  if (!_vm.canInstall) {
+    const note = document.createElement('span');
+    note.className = 'badge badge-yellow';
+    note.textContent = t('installNapcatOnly');
+    $('#modal-footer').appendChild(note);
+  } else if (_vm.selected && (!_vm.selected.downloadUrl || !_vm.selected.checksumUrl)) {
+    const note = document.createElement('span');
+    note.className = 'badge badge-yellow';
+    note.textContent = t('noBuildAssetMsg');
+    $('#modal-footer').appendChild(note);
+  }
   $('#modal-footer').appendChild(updateBtn);
 }
 

@@ -74,7 +74,7 @@ export function buildDefaults(): PluginConfig {
       memoryAlertPercent: 90,
     },
     update: {
-      githubRepo: 'ShiYuPIay/napcat-plugin-qq-guardian',
+      githubRepo: 'qq-guardian/qq-guardian',
       autoCheckOnStartup: true,
     },
     ai: {

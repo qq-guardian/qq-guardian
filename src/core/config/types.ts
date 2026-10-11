@@ -227,7 +227,7 @@ export interface MonitorConfig {
 }
 
 export interface UpdateConfig {
-  /** GitHub repo for release checks, e.g. "ShiYuPIay/napcat-plugin-qq-guardian" */
+  /** GitHub repo for release checks, e.g. "qq-guardian/qq-guardian" */
   githubRepo: string;
   /** Auto-check for updates on startup */
   autoCheckOnStartup: boolean;

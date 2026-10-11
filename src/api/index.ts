@@ -31,7 +31,7 @@ import {
 } from '../modules/groups/index.ts';
 import { getLastHealthStatus } from '../modules/monitor/index.ts';
 import { getOverviewStats }    from '../modules/statistics/index.ts';
-import { checkForUpdate, downloadUpdate, getCurrentVersion, fetchReleases, normalizeReleaseVersion } from '../modules/update/index.ts';
+import { checkForUpdate, downloadUpdate, getCurrentVersion, fetchReleases, installUpdate, normalizeReleaseVersion } from '../modules/update/index.ts';
 import { getDatabase }     from '../database/index.ts';
 import { hashPassword } from '../core/crypto/index.ts';
 import {
@@ -843,7 +843,7 @@ export function registerRoutes(): void {
 
   // ── Update ───────────────────────────────────────────────── (viewer / super_admin)
   r.getNoAuth('/update/check', requireAuth('viewer', async (_req, res) =>
-    ok(res, { current: getCurrentVersion(), latest: await checkForUpdate() })
+    ok(res, { current: getCurrentVersion(), latest: await checkForUpdate(), canInstall: getCtx().kind === 'napcat' })
   ));
 
   r.getNoAuth('/update/releases', requireAuth('viewer', async (_req, res) => {
@@ -851,6 +851,7 @@ export function registerRoutes(): void {
     ok(res, {
       current: getCurrentVersion(),
       githubRepo: configManager.get().update.githubRepo,
+      canInstall: getCtx().kind === 'napcat',
       releases,
     });
   }));
@@ -881,8 +882,20 @@ export function registerRoutes(): void {
       publishedAt: '',
       releaseUrl: '',
       releaseNotes: '',
-    });
+    }, authenticatedOperators.get(req) ?? null);
     ok(res);
+  }));
+
+  r.postNoAuth('/update/install', requireAuth('super_admin', async (req, res) => {
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+      return bad(res, 400, 'Update install body must be an object');
+    }
+    const version = normalizeReleaseVersion((req.body as Record<string, unknown>)['version']);
+    if (!version) return bad(res, 400, 'version must be a valid semantic version');
+    if (getCtx().kind !== 'napcat') {
+      return bad(res, 409, 'In-app installation is supported only for the NapCat plugin');
+    }
+    ok(res, await installUpdate(version, authenticatedOperators.get(req) ?? null));
   }));
 
   // ── Users ─────────────────────────────────────────────────── (super_admin only)

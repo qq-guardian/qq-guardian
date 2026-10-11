@@ -72,7 +72,7 @@
 
       const downloadUrl = safeDownloadUrl(latest.downloadUrl);
       const checksumUrl = safeDownloadUrl(latest.checksumUrl);
-      if (downloadUrl && checksumUrl) {
+      if (downloadUrl && checksumUrl && data?.canInstall !== false) {
         const button = create(
           document,
           'button',
@@ -86,6 +86,8 @@
           checksumUrl,
         }));
         actions.appendChild(button);
+      } else if (data?.canInstall === false) {
+        actions.appendChild(create(document, 'span', 'badge badge-yellow', labels.installUnsupported));
       } else {
         actions.appendChild(create(document, 'span', 'badge badge-yellow', labels.noBuildAsset));
       }

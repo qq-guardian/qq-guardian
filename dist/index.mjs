@@ -900,8 +900,8 @@ function categorizeProviderError(error) {
     if (typedCategory === "invalid_parameters" || typedCategory === "adapter_internal") return "unknown";
   }
   const name = error instanceof Error ? error.name : "";
-  const message = error instanceof Error ? error.message : String(error);
-  const text = `${name} ${message}`.toLowerCase();
+  const message2 = error instanceof Error ? error.message : String(error);
+  const text = `${name} ${message2}`.toLowerCase();
   if (/unauthori[sz]ed|forbidden|authentication|authorization|auth[_ -]?failed|invalid[^\n]*token|\b(?:401|403)\b/.test(text)) {
     return "authentication";
   }
@@ -1416,7 +1416,7 @@ function buildDefaults() {
       memoryAlertPercent: 90
     },
     update: {
-      githubRepo: "ShiYuPIay/napcat-plugin-qq-guardian",
+      githubRepo: "qq-guardian/qq-guardian",
       autoCheckOnStartup: true
     },
     ai: {
@@ -1656,8 +1656,8 @@ async function validateRegexPattern(pattern) {
 var CONFIG_SCHEMA_VERSION = 6;
 var CONFIG_FILENAME = "config.json";
 var ConfigValidationError = class extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message2) {
+    super(message2);
     this.name = "ConfigValidationError";
   }
 };
@@ -1705,8 +1705,8 @@ var RETIRED_RISK_FIELDS = /* @__PURE__ */ new Set([
   "weights",
   "detectors"
 ]);
-function fail(path, message) {
-  throw new ConfigValidationError(`${path}: ${message}`);
+function fail(path, message2) {
+  throw new ConfigValidationError(`${path}: ${message2}`);
 }
 function asRecord(value, path) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -3552,9 +3552,9 @@ function isIntelEnforcementActive(config) {
   return config.enabled && config.enforcementMode === "enforce";
 }
 function parsePinnedIntelFeed(bytes, expectedSha256) {
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (expectedSha256 && sha256 !== expectedSha256) {
-    throw new IntelFeedPinMismatchError(expectedSha256, sha256);
+  const sha2562 = createHash("sha256").update(bytes).digest("hex");
+  if (expectedSha256 && sha2562 !== expectedSha256) {
+    throw new IntelFeedPinMismatchError(expectedSha256, sha2562);
   }
   let document;
   try {
@@ -3562,7 +3562,7 @@ function parsePinnedIntelFeed(bytes, expectedSha256) {
   } catch {
     throw new Error("Intel feed is not valid JSON");
   }
-  return { feed: parseFeed(document), sha256, verified: expectedSha256 !== void 0 };
+  return { feed: parseFeed(document), sha256: sha2562, verified: expectedSha256 !== void 0 };
 }
 var FETCH_TIMEOUT_MS = 8e3;
 var MAX_INTEL_FEED_BYTES = 2 * 1024 * 1024;
@@ -4626,9 +4626,9 @@ ${choices}`);
   _digest(value) {
     return createHash2("sha256").update(value.trim().toLowerCase()).digest();
   }
-  async _sendNotice(userId, message) {
+  async _sendNotice(userId, message2) {
     try {
-      await callOneBot("send_private_msg", { user_id: String(userId), message });
+      await callOneBot("send_private_msg", { user_id: String(userId), message: message2 });
     } catch (error) {
       getLogger().child({ module: "captcha" }).warn(
         { user_id: userId },
@@ -5044,14 +5044,14 @@ function authorizationDenialText(reason) {
       return "\u274C \u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u7684\u7FA4\u6210\u5458\u8EAB\u4EFD\uFF0C\u5DF2\u5B89\u5168\u62D2\u7EDD\u8BE5\u6307\u4EE4\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002";
   }
 }
-function extractCommandInput(message, rawMessage) {
-  if (!Array.isArray(message) || message.length === 0) {
+function extractCommandInput(message2, rawMessage) {
+  if (!Array.isArray(message2) || message2.length === 0) {
     return { text: rawMessage, atTargets: [], hasReply: false };
   }
   let text = "";
   let hasReply = false;
   const atTargets = [];
-  for (const seg of message) {
+  for (const seg of message2) {
     if (seg.type === "text") text += String(seg.data["text"] ?? "");
     else if (seg.type === "reply") hasReply = true;
     else if (seg.type === "at") {
@@ -5485,8 +5485,8 @@ async function plugin_onevent(_runtime, providerEvent) {
 }
 
 // src/lifecycle.ts
-import { join as join7, dirname as dirname3 } from "node:path";
-import { chmodSync as chmodSync4, readFileSync as readFileSync4, existsSync as existsSync7, mkdirSync as mkdirSync6 } from "node:fs";
+import { join as join8, dirname as dirname4 } from "node:path";
+import { chmodSync as chmodSync5, readFileSync as readFileSync6, existsSync as existsSync7, mkdirSync as mkdirSync7 } from "node:fs";
 
 // src/database/repositories/audit.ts
 var AuditRepository = class {
@@ -6209,8 +6209,8 @@ var authSessionRepo = new AuthSessionRepository();
 var LAST_USABLE_SUPER_ADMIN_MESSAGE = "At least one unlocked, password-enabled super administrator must remain";
 var UserAdminMutationError = class extends Error {
   code;
-  constructor(code, message) {
-    super(message);
+  constructor(code, message2) {
+    super(message2);
     this.name = "UserAdminMutationError";
     this.code = code;
   }
@@ -6918,9 +6918,282 @@ function getCachedGroupList() {
 }
 
 // src/modules/update/index.ts
-import { createHash as createHash4 } from "node:crypto";
-import { createReadStream, existsSync as existsSync4, mkdirSync as mkdirSync3, renameSync as renameSync4, unlinkSync as unlinkSync4 } from "node:fs";
-import { join as join4 } from "node:path";
+import { createHash as createHash5 } from "node:crypto";
+import { createReadStream, existsSync as existsSync4, mkdirSync as mkdirSync4, readFileSync as readFileSync4, renameSync as renameSync5, unlinkSync as unlinkSync4 } from "node:fs";
+import { join as join5 } from "node:path";
+
+// src/modules/update/apply.ts
+import { createHash as createHash4, randomUUID as randomUUID4 } from "node:crypto";
+import {
+  chmodSync as chmodSync3,
+  copyFileSync as copyFileSync2,
+  lstatSync,
+  mkdirSync as mkdirSync3,
+  mkdtempSync,
+  readFileSync as readFileSync3,
+  realpathSync,
+  renameSync as renameSync4,
+  rmSync,
+  writeFileSync as writeFileSync3
+} from "node:fs";
+import { dirname, join as join4 } from "node:path";
+
+// src/modules/update/archive.ts
+import { inflateRawSync } from "node:zlib";
+var NAPCAT_UPDATE_FILES = [
+  "index.mjs",
+  "package.json",
+  "plugin-icon.png",
+  "plugin.json",
+  "webui/app.js",
+  "webui/index.html",
+  "webui/release-view.js",
+  "webui/user-security.js"
+];
+var ZIP_LOCAL_HEADER = 67324752;
+var ZIP_CENTRAL_HEADER = 33639248;
+var ZIP_EOCD = 101010256;
+var UTF8_FLAG = 2048;
+var MAX_ARCHIVE_OUTPUT_BYTES = 100 * 1024 * 1024;
+var CRC32_POLYNOMIAL = 3988292384;
+var CRC32_TABLE = createCrc32Table();
+function parseNapCatUpdateArchive(archive) {
+  if (archive.length < 22 || archive.length > MAX_ARCHIVE_OUTPUT_BYTES) {
+    throw new Error("Update archive size is invalid");
+  }
+  const endOffset = findEndRecord(archive);
+  const disk = archive.readUInt16LE(endOffset + 4);
+  const centralDisk = archive.readUInt16LE(endOffset + 6);
+  const entriesOnDisk = archive.readUInt16LE(endOffset + 8);
+  const entryCount = archive.readUInt16LE(endOffset + 10);
+  const centralSize = archive.readUInt32LE(endOffset + 12);
+  const centralOffset = archive.readUInt32LE(endOffset + 16);
+  if (disk !== 0 || centralDisk !== 0 || entriesOnDisk !== entryCount || entryCount !== NAPCAT_UPDATE_FILES.length || centralOffset + centralSize !== endOffset) {
+    throw new Error("Update archive has an unsupported ZIP layout");
+  }
+  const expectedNames = new Set(NAPCAT_UPDATE_FILES);
+  const entries = [];
+  const seenNames = /* @__PURE__ */ new Set();
+  let offset = centralOffset;
+  let totalOutputBytes = 0;
+  for (let index = 0; index < entryCount; index += 1) {
+    requireRange(archive, offset, 46, "ZIP central directory");
+    if (archive.readUInt32LE(offset) !== ZIP_CENTRAL_HEADER) throw new Error("Update archive has an invalid ZIP central directory");
+    const versionMadeBy = archive.readUInt16LE(offset + 4);
+    const flags = archive.readUInt16LE(offset + 8);
+    const method = archive.readUInt16LE(offset + 10);
+    const crc = archive.readUInt32LE(offset + 16);
+    const compressedSize = archive.readUInt32LE(offset + 20);
+    const uncompressedSize = archive.readUInt32LE(offset + 24);
+    const nameLength = archive.readUInt16LE(offset + 28);
+    const extraLength = archive.readUInt16LE(offset + 30);
+    const commentLength = archive.readUInt16LE(offset + 32);
+    const startDisk = archive.readUInt16LE(offset + 34);
+    const externalAttributes = archive.readUInt32LE(offset + 38);
+    const localOffset = archive.readUInt32LE(offset + 42);
+    const recordLength = 46 + nameLength + extraLength + commentLength;
+    requireRange(archive, offset, recordLength, "ZIP central-directory entry");
+    const nameBytes = archive.subarray(offset + 46, offset + 46 + nameLength);
+    const name = decodeUtf8(nameBytes, "ZIP entry name");
+    const unixMode = externalAttributes >>> 16;
+    if (!expectedNames.has(name) || seenNames.has(name) || flags !== UTF8_FLAG || method !== 0 && method !== 8 || startDisk !== 0 || versionMadeBy >>> 8 !== 3 || (unixMode & 61440) !== 32768 || compressedSize > MAX_ARCHIVE_OUTPUT_BYTES || uncompressedSize > MAX_ARCHIVE_OUTPUT_BYTES) {
+      throw new Error(`Update archive contains an unsupported or unsafe entry: ${name || "(empty)"}`);
+    }
+    totalOutputBytes += uncompressedSize;
+    if (totalOutputBytes > MAX_ARCHIVE_OUTPUT_BYTES) throw new Error("Update archive expands beyond the size limit");
+    seenNames.add(name);
+    entries.push({ name, method, flags, crc32: crc, compressedSize, uncompressedSize, localOffset });
+    offset += recordLength;
+  }
+  if (offset !== endOffset || seenNames.size !== expectedNames.size) {
+    throw new Error("Update archive is incomplete or contains unexpected entries");
+  }
+  const localRanges = [];
+  const output = /* @__PURE__ */ new Map();
+  for (const entry of entries) {
+    requireRange(archive, entry.localOffset, 30, `ZIP local header for ${entry.name}`);
+    const local = entry.localOffset;
+    if (archive.readUInt32LE(local) !== ZIP_LOCAL_HEADER || archive.readUInt16LE(local + 6) !== entry.flags || archive.readUInt16LE(local + 8) !== entry.method || archive.readUInt32LE(local + 14) !== entry.crc32 || archive.readUInt32LE(local + 18) !== entry.compressedSize || archive.readUInt32LE(local + 22) !== entry.uncompressedSize) {
+      throw new Error(`Update archive local header does not match its directory entry: ${entry.name}`);
+    }
+    const nameLength = archive.readUInt16LE(local + 26);
+    const extraLength = archive.readUInt16LE(local + 28);
+    requireRange(archive, local + 30, nameLength + extraLength + entry.compressedSize, `ZIP payload for ${entry.name}`);
+    const localName = decodeUtf8(archive.subarray(local + 30, local + 30 + nameLength), "ZIP local entry name");
+    if (localName !== entry.name) throw new Error(`Update archive has mismatched entry names: ${entry.name}`);
+    const dataStart = local + 30 + nameLength + extraLength;
+    const dataEnd = dataStart + entry.compressedSize;
+    if (dataEnd > centralOffset) throw new Error(`Update archive payload overlaps the central directory: ${entry.name}`);
+    localRanges.push({ start: local, end: dataEnd });
+    const compressed = archive.subarray(dataStart, dataEnd);
+    let data;
+    try {
+      data = entry.method === 0 ? Buffer.from(compressed) : inflateRawSync(compressed, { maxOutputLength: MAX_ARCHIVE_OUTPUT_BYTES });
+    } catch {
+      throw new Error(`Update archive entry cannot be decompressed: ${entry.name}`);
+    }
+    if (data.length !== entry.uncompressedSize || crc32(data) !== entry.crc32) {
+      throw new Error(`Update archive entry failed integrity checks: ${entry.name}`);
+    }
+    output.set(entry.name, data);
+  }
+  localRanges.sort((left, right) => left.start - right.start);
+  for (let index = 1; index < localRanges.length; index += 1) {
+    if (localRanges[index - 1].end > localRanges[index].start) {
+      throw new Error("Update archive contains overlapping ZIP entries");
+    }
+  }
+  return output;
+}
+function findEndRecord(archive) {
+  const minimumOffset = Math.max(0, archive.length - 65535 - 22);
+  for (let offset = archive.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (archive.readUInt32LE(offset) !== ZIP_EOCD) continue;
+    const commentLength = archive.readUInt16LE(offset + 20);
+    if (offset + 22 + commentLength === archive.length) return offset;
+  }
+  throw new Error("Update archive is not a valid ZIP file");
+}
+function requireRange(buffer, offset, length, label) {
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > buffer.length) {
+    throw new Error(`Update archive has a truncated ${label}`);
+  }
+}
+function decodeUtf8(value, label) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(value);
+  } catch {
+    throw new Error(`Update archive has an invalid UTF-8 ${label}`);
+  }
+}
+function crc32(data) {
+  let crc = 4294967295;
+  for (const byte of data) crc = crc >>> 8 ^ CRC32_TABLE[(crc ^ byte) & 255];
+  return (crc ^ 4294967295) >>> 0;
+}
+function createCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let value = 0; value < table.length; value += 1) {
+    let current = value;
+    for (let bit = 0; bit < 8; bit += 1) current = current & 1 ? CRC32_POLYNOMIAL ^ current >>> 1 : current >>> 1;
+    table[value] = current >>> 0;
+  }
+  return table;
+}
+
+// src/modules/update/apply.ts
+var PLUGIN_PACKAGE_NAME = "napcat-plugin-qq-guardian";
+function applyNapCatUpdateArchive(archive, pluginPath, backupRoot, version7) {
+  const files = parseNapCatUpdateArchive(archive);
+  validateReleaseManifests(files, version7);
+  const pluginRoot = realpathSync(pluginPath);
+  if (!lstatSync(pluginRoot).isDirectory()) throw new Error("NapCat plugin path is not a directory");
+  const targets = NAPCAT_UPDATE_FILES.map((relativePath) => {
+    const parts = relativePath.split("/");
+    let parent = pluginRoot;
+    for (const segment of parts.slice(0, -1)) {
+      parent = join4(parent, segment);
+      const parentStat = lstatSync(parent);
+      if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+        throw new Error(`Refusing to update through a non-directory or symbolic link: ${relativePath}`);
+      }
+    }
+    const path = join4(pluginRoot, ...parts);
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error(`Refusing to replace a non-regular or symbolic-link file: ${relativePath}`);
+    }
+    return { relativePath, path, mode: info.mode & 511 };
+  });
+  mkdirSync3(backupRoot, { recursive: true, mode: 448 });
+  const resolvedBackupRoot = realpathSync(backupRoot);
+  const backupPath = mkdtempSync(join4(resolvedBackupRoot, `update-${version7.replace(/[^A-Za-z0-9._+-]/g, "_")}-`));
+  chmodSync3(backupPath, 448);
+  const previousFiles = [];
+  try {
+    for (const target of targets) {
+      const destination = join4(backupPath, ...target.relativePath.split("/"));
+      mkdirSync3(dirname(destination), { recursive: true, mode: 448 });
+      copyFileSync2(target.path, destination);
+      chmodSync3(destination, 384);
+      previousFiles.push({ path: target.relativePath, sha256: sha256(readFileSync3(destination)) });
+    }
+    writeFileSync3(join4(backupPath, "manifest.json"), `${JSON.stringify({
+      version: version7,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      files: previousFiles
+    }, null, 2)}
+`, { flag: "wx", mode: 384 });
+  } catch (error) {
+    rmSync(backupPath, { recursive: true, force: true });
+    throw new Error(`Could not create a complete update backup: ${message(error)}`);
+  }
+  const replaced = [];
+  try {
+    for (const target of targets) {
+      replaceFile(target.path, files.get(target.relativePath), target.mode);
+      replaced.push(target);
+    }
+  } catch (error) {
+    const rollbackErrors = [];
+    for (const target of replaced.reverse()) {
+      try {
+        replaceFile(target.path, readFileSync3(join4(backupPath, ...target.relativePath.split("/"))), target.mode);
+      } catch (rollbackError) {
+        rollbackErrors.push(`${target.relativePath}: ${message(rollbackError)}`);
+      }
+    }
+    if (rollbackErrors.length > 0) {
+      throw new Error(
+        `Update failed and rollback was incomplete; restore files from ${backupPath}. Update error: ${message(error)}. Rollback errors: ${rollbackErrors.join("; ")}`
+      );
+    }
+    throw new Error(`Update failed; previous files were restored. Backup retained at ${backupPath}. ${message(error)}`);
+  }
+  return { backupPath, files: targets.length };
+}
+function validateReleaseManifests(files, expectedVersion) {
+  for (const name of ["package.json", "plugin.json"]) {
+    let manifest;
+    try {
+      manifest = JSON.parse(files.get(name).toString("utf8"));
+    } catch {
+      throw new Error(`Update archive has an invalid ${name}`);
+    }
+    if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+      throw new Error(`Update archive has an invalid ${name}`);
+    }
+    const record2 = manifest;
+    if (record2["name"] !== PLUGIN_PACKAGE_NAME || record2["version"] !== expectedVersion) {
+      throw new Error(`Update archive ${name} does not match the selected QQ Guardian release`);
+    }
+  }
+}
+function replaceFile(destination, contents, mode) {
+  const temporary = join4(dirname(destination), `.qq-guardian-update-${process.pid}-${randomSuffix()}.tmp`);
+  try {
+    writeFileSync3(temporary, contents, { flag: "wx", mode });
+    chmodSync3(temporary, mode);
+    renameSync4(temporary, destination);
+  } catch (error) {
+    try {
+      rmSync(temporary, { force: true });
+    } catch {
+    }
+    throw error;
+  }
+}
+function sha256(data) {
+  return createHash4("sha256").update(data).digest("hex");
+}
+function randomSuffix() {
+  return randomUUID4();
+}
+function message(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+// src/modules/update/index.ts
 var ALLOWED_DOWNLOAD_ORIGINS = /* @__PURE__ */ new Set([
   "github.com",
   "objects.githubusercontent.com",
@@ -7096,7 +7369,7 @@ async function fetchReleases() {
   }
 }
 async function sha256File(path) {
-  const hash = createHash4("sha256");
+  const hash = createHash5("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -7149,7 +7422,7 @@ async function verifyGitHubAttestation(repo, artifactDigest) {
   }
   return "mismatch";
 }
-async function downloadUpdate(info) {
+async function downloadUpdate(info, actorId = null) {
   const normalizedVersion = normalizeReleaseVersion(info.version);
   if (!normalizedVersion) throw new Error("Update version must be a valid semantic version");
   const downloadUrl = info.downloadUrl;
@@ -7159,12 +7432,12 @@ async function downloadUpdate(info) {
   }
   validateDownloadUrl(downloadUrl);
   validateDownloadUrl(checksumUrl);
-  await withLock(locks.update(), async () => {
+  return withLock(locks.update(), async () => {
     const log = getLogger().child({ module: "update" });
-    const backupDir = join4(getRuntimeHost().paths.dataPath, "backups");
-    mkdirSync3(backupDir, { recursive: true });
+    const backupDir = join5(getRuntimeHost().paths.dataPath, "backups");
+    mkdirSync4(backupDir, { recursive: true });
     const safeVersion = normalizedVersion.replace(/\+/g, "_");
-    const finalPath = join4(backupDir, `update-${safeVersion}.zip`);
+    const finalPath = join5(backupDir, `update-${safeVersion}.zip`);
     const unverifiedPath = `${finalPath}.unverified`;
     if (existsSync4(finalPath) || existsSync4(unverifiedPath)) {
       throw new Error("Update artifact already exists; remove it explicitly before downloading again");
@@ -7179,6 +7452,7 @@ async function downloadUpdate(info) {
       throw new Error(`Update download failed: HTTP ${archive.status}`);
     }
     const totalBytes = await writeResponseToFile(archive, unverifiedPath, MAX_UPDATE_BYTES);
+    let verifiedDigest = "";
     try {
       const checksum = await fetchRemote(checksumUrl, {}, {
         allowedHosts: ALLOWED_DOWNLOAD_ORIGINS,
@@ -7195,6 +7469,7 @@ async function downloadUpdate(info) {
       if (actualDigest !== expected) {
         throw new Error("Release checksum does not match the downloaded archive");
       }
+      verifiedDigest = actualDigest;
       const repo = configManager.get().update.githubRepo;
       try {
         const attestationResult = await verifyGitHubAttestation(repo, actualDigest);
@@ -7219,7 +7494,7 @@ async function downloadUpdate(info) {
           "Could not contact GitHub attestation API; proceeding with checksum-only verification. Run `gh attestation verify` out-of-band when possible."
         );
       }
-      renameSync4(unverifiedPath, finalPath);
+      renameSync5(unverifiedPath, finalPath);
     } catch (error) {
       try {
         unlinkSync4(unverifiedPath);
@@ -7227,15 +7502,56 @@ async function downloadUpdate(info) {
       }
       throw error;
     }
-    log.info({ version: info.version, path: finalPath, bytes: totalBytes }, "Verified update downloaded; extract it and restart Guardian to apply");
+    log.info({ version: info.version, path: finalPath, bytes: totalBytes }, "Verified update downloaded for WebUI installation or explicit manual application");
     bus.emit("AuditCreated", {
       action: "plugin.update_downloaded",
-      actorId: null,
+      actorId: actorId === null ? null : String(actorId),
       targetType: "plugin",
       targetId: "qq-guardian",
       details: { fromVersion: currentVersion, toVersion: info.version, downloadPath: finalPath },
       timestamp: Date.now()
     });
+    return verifiedDigest;
+  });
+}
+async function installUpdate(version7, actorId = null) {
+  const normalizedVersion = normalizeReleaseVersion(version7);
+  if (!normalizedVersion) throw new Error("Update version must be a valid semantic version");
+  const host = getRuntimeHost();
+  if (host.kind !== "napcat") throw new Error("In-app installation is supported only for the NapCat plugin; use the standalone updater for SnowLuma");
+  const release = (await fetchReleases()).find((candidate) => candidate.version === normalizedVersion);
+  if (!release?.downloadUrl || !release.checksumUrl) {
+    throw new Error("This release is no longer available with a verified NapCat archive");
+  }
+  const verifiedDigest = await downloadUpdate(release, actorId);
+  return withLock(locks.update(), async () => {
+    const safeVersion = normalizedVersion.replace(/\+/g, "_");
+    const archivePath = join5(host.paths.dataPath, "backups", `update-${safeVersion}.zip`);
+    if (!existsSync4(archivePath)) throw new Error("Verified update archive is missing; download it again");
+    const archive = readFileSync4(archivePath);
+    const diskDigest = createHash5("sha256").update(archive).digest("hex");
+    if (diskDigest !== verifiedDigest) {
+      throw new Error("Verified update archive changed before installation; download it again");
+    }
+    const result = applyNapCatUpdateArchive(
+      archive,
+      host.paths.pluginPath,
+      join5(host.paths.dataPath, "backups", "update-backups"),
+      normalizedVersion
+    );
+    getLogger().child({ module: "update" }).info(
+      { version: normalizedVersion, backupPath: result.backupPath, files: result.files },
+      "Verified update installed; reload the QQ Guardian plugin to activate it"
+    );
+    bus.emit("AuditCreated", {
+      action: "plugin.update_installed",
+      actorId: actorId === null ? null : String(actorId),
+      targetType: "plugin",
+      targetId: "qq-guardian",
+      details: { fromVersion: currentVersion, toVersion: normalizedVersion, backupPath: result.backupPath, files: result.files },
+      timestamp: Date.now()
+    });
+    return { version: normalizedVersion, ...result };
   });
 }
 function isNewerVersion(latest, current) {
@@ -7326,7 +7642,7 @@ function requireAuth(minRole, fn) {
   });
 }
 var ok = (res, data = {}) => res.json({ code: 0, data });
-var bad = (res, status, message) => res.status(status).json({ code: -1, message });
+var bad = (res, status, message2) => res.status(status).json({ code: -1, message: message2 });
 function respondToUserMutationError(res, error) {
   if (!(error instanceof UserAdminMutationError)) return false;
   const status = error.code === "user_not_found" ? 404 : error.code === "self_delete" ? 400 : 409;
@@ -7853,13 +8169,14 @@ function registerRoutes() {
   }));
   r.getNoAuth("/update/check", requireAuth(
     "viewer",
-    async (_req, res) => ok(res, { current: getCurrentVersion(), latest: await checkForUpdate() })
+    async (_req, res) => ok(res, { current: getCurrentVersion(), latest: await checkForUpdate(), canInstall: getRuntimeHost().kind === "napcat" })
   ));
   r.getNoAuth("/update/releases", requireAuth("viewer", async (_req, res) => {
     const releases = await fetchReleases();
     ok(res, {
       current: getCurrentVersion(),
       githubRepo: configManager.get().update.githubRepo,
+      canInstall: getRuntimeHost().kind === "napcat",
       releases
     });
   }));
@@ -7882,8 +8199,19 @@ function registerRoutes() {
       publishedAt: "",
       releaseUrl: "",
       releaseNotes: ""
-    });
+    }, authenticatedOperators.get(req) ?? null);
     ok(res);
+  }));
+  r.postNoAuth("/update/install", requireAuth("super_admin", async (req, res) => {
+    if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+      return bad(res, 400, "Update install body must be an object");
+    }
+    const version7 = normalizeReleaseVersion(req.body["version"]);
+    if (!version7) return bad(res, 400, "version must be a valid semantic version");
+    if (getRuntimeHost().kind !== "napcat") {
+      return bad(res, 409, "In-app installation is supported only for the NapCat plugin");
+    }
+    ok(res, await installUpdate(version7, authenticatedOperators.get(req) ?? null));
   }));
   function sanitizeUser(user) {
     const { password_hash: _, ...sanitized } = user;
@@ -8023,9 +8351,9 @@ function registerRoutes() {
 }
 
 // src/migration/shadow.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync5, renameSync as renameSync6, unlinkSync as unlinkSync6 } from "fs";
-import { randomUUID as randomUUID5 } from "crypto";
-import { dirname as dirname2, join as join6, resolve as resolve2 } from "path";
+import { existsSync as existsSync6, mkdirSync as mkdirSync6, renameSync as renameSync7, unlinkSync as unlinkSync6 } from "fs";
+import { randomUUID as randomUUID6 } from "crypto";
+import { dirname as dirname3, join as join7, resolve as resolve2 } from "path";
 
 // src/database/validation.ts
 var OPERATIONAL_TABLES = [
@@ -8053,8 +8381,8 @@ var ONEBOT_ID_COLUMNS = {
   stat_snapshots: ["group_id"]
 };
 var DatabaseValidationError = class extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message2) {
+    super(message2);
     this.name = "DatabaseValidationError";
   }
 };
@@ -8235,30 +8563,30 @@ async function validateDatabase(db) {
 
 // src/migration/files.ts
 import {
-  chmodSync as chmodSync3,
+  chmodSync as chmodSync4,
   closeSync as closeSync3,
-  copyFileSync as copyFileSync2,
+  copyFileSync as copyFileSync3,
   existsSync as existsSync5,
   fsyncSync,
-  mkdirSync as mkdirSync4,
+  mkdirSync as mkdirSync5,
   openSync as openSync3,
-  readFileSync as readFileSync3,
+  readFileSync as readFileSync5,
   readSync,
-  renameSync as renameSync5,
-  rmSync,
+  renameSync as renameSync6,
+  rmSync as rmSync2,
   statSync,
   unlinkSync as unlinkSync5,
-  writeFileSync as writeFileSync3
+  writeFileSync as writeFileSync4
 } from "fs";
-import { createHash as createHash5, randomUUID as randomUUID4 } from "crypto";
-import { dirname, join as join5, relative, resolve } from "path";
+import { createHash as createHash6, randomUUID as randomUUID5 } from "crypto";
+import { dirname as dirname2, join as join6, relative, resolve } from "path";
 import { DatabaseSync as DatabaseSync2 } from "node:sqlite";
 
 // src/migration/types.ts
 var SHADOW_MIGRATION_FORMAT = "shadow-migration-v1";
 var ShadowMigrationError = class extends Error {
-  constructor(message, options) {
-    super(message, options);
+  constructor(message2, options) {
+    super(message2, options);
     this.name = "ShadowMigrationError";
   }
 };
@@ -8293,7 +8621,7 @@ function ensureRegularFile(path, label) {
 }
 function sha256File2(path) {
   const fd = openSync3(path, "r");
-  const hash = createHash5("sha256");
+  const hash = createHash6("sha256");
   const buffer = Buffer.allocUnsafe(HASH_BUFFER_SIZE);
   try {
     let offset = 0;
@@ -8329,16 +8657,16 @@ function artifactMatches(path, expected) {
   }
 }
 function writeFileAtomically(path, content) {
-  mkdirSync4(dirname(path), { recursive: true, mode: 448 });
-  const temporary = join5(dirname(path), `.${randomUUID4()}.${process.pid}.tmp`);
+  mkdirSync5(dirname2(path), { recursive: true, mode: 448 });
+  const temporary = join6(dirname2(path), `.${randomUUID5()}.${process.pid}.tmp`);
   let fd;
   try {
-    writeFileSync3(temporary, content, { mode: 384 });
+    writeFileSync4(temporary, content, { mode: 384 });
     fd = openSync3(temporary, "r+");
     syncBestEffort(fd);
     closeSync3(fd);
     fd = void 0;
-    renameSync5(temporary, path);
+    renameSync6(temporary, path);
   } catch (error) {
     if (fd !== void 0) closeSync3(fd);
     try {
@@ -8353,14 +8681,14 @@ function writeJsonAtomically(path, value) {
 `);
 }
 function readJson(path) {
-  return JSON.parse(readFileSync3(path, "utf8"));
+  return JSON.parse(readFileSync5(path, "utf8"));
 }
 function copyArtifact(source, destination, label) {
   ensureRegularFile(source, label);
-  mkdirSync4(dirname(destination), { recursive: true, mode: 448 });
-  copyFileSync2(source, destination);
+  mkdirSync5(dirname2(destination), { recursive: true, mode: 448 });
+  copyFileSync3(source, destination);
   try {
-    chmodSync3(destination, 384);
+    chmodSync4(destination, 384);
   } catch {
   }
   const copied = describeArtifact(destination);
@@ -8372,7 +8700,7 @@ function copyArtifact(source, destination, label) {
 }
 function snapshotDatabase(source, destination) {
   ensureRegularFile(source, "database source");
-  mkdirSync4(dirname(destination), { recursive: true, mode: 448 });
+  mkdirSync5(dirname2(destination), { recursive: true, mode: 448 });
   if (existsSync5(destination)) unlinkSync5(destination);
   const db = new DatabaseSync2(source, { readOnly: true, timeout: 5e3 });
   try {
@@ -8382,26 +8710,26 @@ function snapshotDatabase(source, destination) {
     db.close();
   }
   try {
-    chmodSync3(destination, 384);
+    chmodSync4(destination, 384);
   } catch {
   }
   return describeArtifact(destination);
 }
 function replaceFromArtifact(source, target, label) {
   ensureRegularFile(source, label);
-  const temporary = join5(dirname(target), `.${randomUUID4()}.${process.pid}.next`);
-  mkdirSync4(dirname(target), { recursive: true, mode: 448 });
+  const temporary = join6(dirname2(target), `.${randomUUID5()}.${process.pid}.next`);
+  mkdirSync5(dirname2(target), { recursive: true, mode: 448 });
   try {
-    copyFileSync2(source, temporary);
+    copyFileSync3(source, temporary);
     const fd = openSync3(temporary, "r+");
     try {
       syncBestEffort(fd);
     } finally {
       closeSync3(fd);
     }
-    renameSync5(temporary, target);
+    renameSync6(temporary, target);
     try {
-      chmodSync3(target, 384);
+      chmodSync4(target, 384);
     } catch {
     }
   } catch (error) {
@@ -8420,17 +8748,17 @@ function removeSqliteSidecars(databasePath) {
   }
 }
 function removeStagingDirectory(dataDir, stagingDir) {
-  const migrationRoot = assertPathInside(dataDir, join5(dataDir, "migration"), "migration root");
+  const migrationRoot = assertPathInside(dataDir, join6(dataDir, "migration"), "migration root");
   const resolvedStaging = assertPathInside(migrationRoot, stagingDir, "staging directory");
-  if (existsSync5(resolvedStaging)) rmSync(resolvedStaging, { recursive: true, force: false });
+  if (existsSync5(resolvedStaging)) rmSync2(resolvedStaging, { recursive: true, force: false });
 }
 function writeJournal(path, journal) {
   journal.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
   writeJsonAtomically(path, journal);
 }
 function acquireMigrationLock(dataDir) {
-  mkdirSync4(dataDir, { recursive: true });
-  const lockPath = join5(dataDir, "migration.lock");
+  mkdirSync5(dataDir, { recursive: true });
+  const lockPath = join6(dataDir, "migration.lock");
   const createLock = () => openSync3(lockPath, "wx");
   let fd;
   try {
@@ -8440,7 +8768,7 @@ function acquireMigrationLock(dataDir) {
     if (code !== "EEXIST") throw error;
     let holder = {};
     try {
-      holder = JSON.parse(readFileSync3(lockPath, "utf8"));
+      holder = JSON.parse(readFileSync5(lockPath, "utf8"));
     } catch {
     }
     const pid = typeof holder.pid === "number" && Number.isSafeInteger(holder.pid) && holder.pid > 0 ? holder.pid : void 0;
@@ -8459,12 +8787,12 @@ function acquireMigrationLock(dataDir) {
     if (pid === void 0 && Date.now() - statSync(lockPath).mtimeMs < 3e4) {
       throw new ShadowMigrationError("A Guardian migration lock is being initialized; retry shortly");
     }
-    const stalePath = join5(dataDir, `migration.lock.stale-${Date.now()}-${randomUUID4()}`);
-    renameSync5(lockPath, stalePath);
+    const stalePath = join6(dataDir, `migration.lock.stale-${Date.now()}-${randomUUID5()}`);
+    renameSync6(lockPath, stalePath);
     fd = createLock();
   }
   try {
-    writeFileSync3(fd, JSON.stringify({ pid: process.pid, createdAt: (/* @__PURE__ */ new Date()).toISOString() }));
+    writeFileSync4(fd, JSON.stringify({ pid: process.pid, createdAt: (/* @__PURE__ */ new Date()).toISOString() }));
     syncBestEffort(fd);
   } finally {
     closeSync3(fd);
@@ -8492,19 +8820,19 @@ function asRecord2(value, label) {
 function resolveLayout(paths) {
   const configDir = resolve2(paths.configDir);
   const dataDir = resolve2(paths.dataDir);
-  const configPath = assertPathInside(configDir, join6(configDir, CONFIG_FILENAME), "config path");
+  const configPath = assertPathInside(configDir, join7(configDir, CONFIG_FILENAME), "config path");
   const databasePath = assertPathInside(dataDir, getDatabasePath(dataDir), "database path");
   return {
     configDir,
     dataDir,
     configPath,
     databasePath,
-    credentialsPath: assertPathInside(dataDir, join6(dataDir, CREDENTIALS_FILENAME), "credentials path"),
-    journalPath: assertPathInside(dataDir, join6(dataDir, JOURNAL_FILENAME), "migration journal path")
+    credentialsPath: assertPathInside(dataDir, join7(dataDir, CREDENTIALS_FILENAME), "credentials path"),
+    journalPath: assertPathInside(dataDir, join7(dataDir, JOURNAL_FILENAME), "migration journal path")
   };
 }
 function migrationId() {
-  return randomUUID5();
+  return randomUUID6();
 }
 function migrationDirectoryName(id) {
   return `migration-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}-${id}`;
@@ -8524,8 +8852,8 @@ function parseJournal(value, layout) {
   if (resolve2(String(pathRecord.configPath)) !== layout.configPath || resolve2(String(pathRecord.databasePath)) !== layout.databasePath || resolve2(String(pathRecord.credentialsPath)) !== layout.credentialsPath) {
     throw new ShadowMigrationError("migration journal does not match the configured persistent paths");
   }
-  const backupsRoot = assertPathInside(layout.dataDir, join6(layout.dataDir, "backups"), "backups root");
-  const stagingRoot = assertPathInside(layout.dataDir, join6(layout.dataDir, "migration"), "staging root");
+  const backupsRoot = assertPathInside(layout.dataDir, join7(layout.dataDir, "backups"), "backups root");
+  const stagingRoot = assertPathInside(layout.dataDir, join7(layout.dataDir, "migration"), "staging root");
   const backupDir = assertPathInside(backupsRoot, String(pathRecord.backupDir), "journal backup directory");
   const stagingDir = assertPathInside(stagingRoot, String(pathRecord.stagingDir), "journal staging directory");
   if (backupDir !== resolve2(String(pathRecord.backupDir)) || stagingDir !== resolve2(String(pathRecord.stagingDir))) {
@@ -8564,7 +8892,7 @@ function completedJournalProvesPreviousConfigGeneration(journal, layout, activeC
   assertRecoverableJournal(journal, layout);
   const manifestPath = assertPathInside(
     journal.paths.backupDir,
-    join6(journal.paths.backupDir, "manifest.json"),
+    join7(journal.paths.backupDir, "manifest.json"),
     "completed migration manifest"
   );
   ensureRegularFile(manifestPath, "completed migration manifest");
@@ -8588,13 +8916,13 @@ function completedJournalProvesPreviousConfigGeneration(journal, layout, activeC
 function archiveJournal(layout, journal, reason) {
   const archivePath = assertPathInside(
     layout.dataDir,
-    join6(layout.dataDir, `migration-state.${journal.id}.${reason}.json`),
+    join7(layout.dataDir, `migration-state.${journal.id}.${reason}.json`),
     "archived migration journal path"
   );
   if (existsSync6(archivePath)) {
     throw new ShadowMigrationError(`refusing to overwrite an existing journal archive: ${archivePath}`);
   }
-  renameSync6(layout.journalPath, archivePath);
+  renameSync7(layout.journalPath, archivePath);
 }
 function assertArtifactPath(artifact, expectedPath, label) {
   if (resolve2(artifact.path) !== resolve2(expectedPath)) {
@@ -8604,9 +8932,9 @@ function assertArtifactPath(artifact, expectedPath, label) {
 function assertRecoverableJournal(journal, layout) {
   if (!journal.source) throw new ShadowMigrationError("migration journal has no verified source backup");
   const backupDir = journal.paths.backupDir;
-  assertArtifactPath(journal.source.config, join6(backupDir, CONFIG_FILENAME), "source config");
-  if (journal.source.database) assertArtifactPath(journal.source.database, join6(backupDir, "qqadmin.db"), "source database");
-  if (journal.source.credentials) assertArtifactPath(journal.source.credentials, join6(backupDir, CREDENTIALS_FILENAME), "source credentials");
+  assertArtifactPath(journal.source.config, join7(backupDir, CONFIG_FILENAME), "source config");
+  if (journal.source.database) assertArtifactPath(journal.source.database, join7(backupDir, "qqadmin.db"), "source database");
+  if (journal.source.credentials) assertArtifactPath(journal.source.credentials, join7(backupDir, CREDENTIALS_FILENAME), "source credentials");
   verifyArtifact(journal.source.config, "source config backup");
   if (journal.source.database) verifyArtifact(journal.source.database, "source database backup");
   if (journal.source.credentials) verifyArtifact(journal.source.credentials, "source credentials backup");
@@ -8614,8 +8942,8 @@ function assertRecoverableJournal(journal, layout) {
 }
 function assertCandidateJournal(journal) {
   if (!journal.candidate) throw new ShadowMigrationError("migration journal has no staged candidate");
-  assertArtifactPath(journal.candidate.config, join6(journal.paths.stagingDir, "config.next.json"), "candidate config");
-  assertArtifactPath(journal.candidate.database, join6(journal.paths.stagingDir, "qqadmin.next.db"), "candidate database");
+  assertArtifactPath(journal.candidate.config, join7(journal.paths.stagingDir, "config.next.json"), "candidate config");
+  assertArtifactPath(journal.candidate.database, join7(journal.paths.stagingDir, "qqadmin.next.db"), "candidate database");
   verifyArtifact(journal.candidate.config, "candidate config");
   verifyArtifact(journal.candidate.database, "candidate database");
 }
@@ -8719,12 +9047,12 @@ function createJournal(layout) {
   const id = migrationId();
   const backupDir = assertPathInside(
     layout.dataDir,
-    join6(layout.dataDir, "backups", migrationDirectoryName(id)),
+    join7(layout.dataDir, "backups", migrationDirectoryName(id)),
     "migration backup directory"
   );
   const stagingDir = assertPathInside(
     layout.dataDir,
-    join6(layout.dataDir, "migration", id),
+    join7(layout.dataDir, "migration", id),
     "migration staging directory"
   );
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -8746,10 +9074,10 @@ function createJournal(layout) {
   };
 }
 function createBackups(journal, layout) {
-  mkdirSync5(journal.paths.backupDir, { recursive: true, mode: 448 });
-  const config = copyArtifact(layout.configPath, join6(journal.paths.backupDir, CONFIG_FILENAME), "configuration");
-  const database = existsSync6(layout.databasePath) ? snapshotDatabase(layout.databasePath, join6(journal.paths.backupDir, "qqadmin.db")) : null;
-  const credentials = existsSync6(layout.credentialsPath) ? copyArtifact(layout.credentialsPath, join6(journal.paths.backupDir, CREDENTIALS_FILENAME), "credentials") : null;
+  mkdirSync6(journal.paths.backupDir, { recursive: true, mode: 448 });
+  const config = copyArtifact(layout.configPath, join7(journal.paths.backupDir, CONFIG_FILENAME), "configuration");
+  const database = existsSync6(layout.databasePath) ? snapshotDatabase(layout.databasePath, join7(journal.paths.backupDir, "qqadmin.db")) : null;
+  const credentials = existsSync6(layout.credentialsPath) ? copyArtifact(layout.credentialsPath, join7(journal.paths.backupDir, CREDENTIALS_FILENAME), "credentials") : null;
   return { config, database, credentials };
 }
 function readSourceDatabaseMetadata(source) {
@@ -8765,7 +9093,7 @@ function readSourceDatabaseMetadata(source) {
   }
 }
 async function createCandidateDatabase(candidatePath, source, sourceRowCounts) {
-  mkdirSync5(dirname2(candidatePath), { recursive: true, mode: 448 });
+  mkdirSync6(dirname3(candidatePath), { recursive: true, mode: 448 });
   if (source) {
     copyArtifact(source.path, candidatePath, "database staging source");
   }
@@ -8788,7 +9116,7 @@ function writeManifest(path, manifest) {
 }
 async function performMigration(layout) {
   const journal = createJournal(layout);
-  mkdirSync5(layout.dataDir, { recursive: true, mode: 448 });
+  mkdirSync6(layout.dataDir, { recursive: true, mode: 448 });
   writeJournal(layout.journalPath, journal);
   try {
     journal.source = createBackups(journal, layout);
@@ -8808,16 +9136,16 @@ async function performMigration(layout) {
         databaseSchemaVersion: DATABASE_SCHEMA_VERSION
       }
     };
-    writeManifest(join6(journal.paths.backupDir, "manifest.json"), manifest);
-    mkdirSync5(journal.paths.stagingDir, { recursive: true, mode: 448 });
+    writeManifest(join7(journal.paths.backupDir, "manifest.json"), manifest);
+    mkdirSync6(journal.paths.stagingDir, { recursive: true, mode: 448 });
     const migratedConfig = migrateLegacyConfig(readJson(journal.source.config.path));
-    const candidateConfigPath = join6(journal.paths.stagingDir, "config.next.json");
+    const candidateConfigPath = join7(journal.paths.stagingDir, "config.next.json");
     writeJsonAtomically(candidateConfigPath, migratedConfig.file);
     const candidateConfigFile = validateCanonicalConfigFile(readJson(candidateConfigPath));
     await validatePersistedApprovalPatterns(candidateConfigFile.config);
     const candidateConfig = describeArtifact(candidateConfigPath);
     const candidateDatabase = await createCandidateDatabase(
-      join6(journal.paths.stagingDir, "qqadmin.next.db"),
+      join7(journal.paths.stagingDir, "qqadmin.next.db"),
       journal.source.database,
       sourceMetadata.rowCounts
     );
@@ -8833,9 +9161,9 @@ async function performMigration(layout) {
       retiredConfigFields: migratedConfig.retiredFields,
       retiredDatabaseFields: sourceMetadata.retiredFields
     };
-    writeJsonAtomically(join6(journal.paths.stagingDir, "validation.json"), validation);
+    writeJsonAtomically(join7(journal.paths.stagingDir, "validation.json"), validation);
     manifest.validation = validation;
-    writeManifest(join6(journal.paths.backupDir, "manifest.json"), manifest);
+    writeManifest(join7(journal.paths.backupDir, "manifest.json"), manifest);
     journal.phase = "staged_validated";
     writeJournal(layout.journalPath, journal);
     assertCandidateJournal(journal);
@@ -8968,18 +9296,18 @@ var bootPromise = null;
 var generation = 0;
 function readPackageVersion(pluginPath) {
   try {
-    const packagePath = join7(pluginPath, "package.json");
+    const packagePath = join8(pluginPath, "package.json");
     if (existsSync7(packagePath)) {
-      return JSON.parse(readFileSync4(packagePath, "utf8")).version ?? "1.0.0";
+      return JSON.parse(readFileSync6(packagePath, "utf8")).version ?? "1.0.0";
     }
   } catch {
   }
   return "1.0.0";
 }
 function ensurePrivateDirectory(directory) {
-  mkdirSync6(directory, { recursive: true, mode: 448 });
+  mkdirSync7(directory, { recursive: true, mode: 448 });
   try {
-    chmodSync4(directory, 448);
+    chmodSync5(directory, 448);
   } catch {
   }
 }
@@ -9012,8 +9340,8 @@ function ensureBootIsCurrent(expectedGeneration) {
 function registerWebUi(host) {
   const { pluginPath } = host.paths;
   const candidates = [
-    { absolute: join7(pluginPath, "dist", "webui", "index.html"), relative: "dist/webui/index.html" },
-    { absolute: join7(pluginPath, "webui", "index.html"), relative: "webui/index.html" }
+    { absolute: join8(pluginPath, "dist", "webui", "index.html"), relative: "dist/webui/index.html" },
+    { absolute: join8(pluginPath, "webui", "index.html"), relative: "webui/index.html" }
   ];
   const found = candidates.find((candidate) => existsSync7(candidate.absolute));
   const log = getLogger().child({ module: "lifecycle" });
@@ -9021,7 +9349,7 @@ function registerWebUi(host) {
     log.warn("WebUI index.html not found; run pnpm build");
     return;
   }
-  host.router.static("/static", dirname3(found.relative));
+  host.router.static("/static", dirname4(found.relative));
   host.router.page({
     path: "guardian",
     title: "QQ Guardian",
@@ -9042,7 +9370,7 @@ async function boot(host) {
     try {
       setRuntimeHost(host);
       const { dataPath, configDir, pluginPath } = host.paths;
-      for (const directory of [dataPath, join7(dataPath, "backups"), configDir]) {
+      for (const directory of [dataPath, join8(dataPath, "backups"), configDir]) {
         ensurePrivateDirectory(directory);
       }
       log.info({ runtime: host.kind }, "Plugin booting");
@@ -9118,7 +9446,7 @@ async function teardown() {
 
 // src/adapters/napcat/runtime-host.ts
 import { existsSync as existsSync8, statSync as statSync2 } from "node:fs";
-import { basename, dirname as dirname4, resolve as resolve3 } from "node:path";
+import { basename, dirname as dirname5, resolve as resolve3 } from "node:path";
 
 // src/runtime/onebot-provider.ts
 var GUARDIAN_ONEBOT_ACTIONS = Object.freeze([
@@ -9205,9 +9533,9 @@ function requireNonEmptyString(params, key) {
   if (typeof params[key] !== "string" || !params[key].trim()) throw new TypeError(`${key} must be a non-empty string`);
 }
 function requireMessage(params) {
-  const message = params["message"];
-  if (typeof message === "string") return;
-  if (Array.isArray(message)) return;
+  const message2 = params["message"];
+  if (typeof message2 === "string") return;
+  if (Array.isArray(message2)) return;
   throw new TypeError("message must be a string or OneBot segment array");
 }
 function validateOneBotActionParameters(action, params) {
@@ -9366,8 +9694,8 @@ function normalizeOneBotActionResponse(provider, action, value) {
 }
 function classifyUnknownProviderError(error) {
   const name = error instanceof Error ? error.name : "";
-  const message = error instanceof Error ? error.message : String(error);
-  const text = `${name} ${message}`.toLowerCase();
+  const message2 = error instanceof Error ? error.message : String(error);
+  const text = `${name} ${message2}`.toLowerCase();
   if (/unauthori[sz]ed|forbidden|authentication|authorization|invalid[^\n]*token|\b(?:401|403)\b/.test(text)) return "authentication";
   if (name === "AbortError" || /timed?\s*out|timeout/.test(text)) return "timeout";
   if (/not connected|disconnect|connection[^\n]*(?:closed|failed|refused|reset)|econn(?:refused|reset)|\bepipe\b/.test(text)) return "connection";
@@ -9447,9 +9775,9 @@ var VOID_RESPONSE_ACTIONS = /* @__PURE__ */ new Set([
 function resolveNapCatConfigDir(configPath) {
   const absolutePath = resolve3(configPath);
   if (existsSync8(absolutePath)) {
-    return statSync2(absolutePath).isDirectory() ? absolutePath : dirname4(absolutePath);
+    return statSync2(absolutePath).isDirectory() ? absolutePath : dirname5(absolutePath);
   }
-  return basename(absolutePath).toLowerCase() === "config.json" ? dirname4(absolutePath) : absolutePath;
+  return basename(absolutePath).toLowerCase() === "config.json" ? dirname5(absolutePath) : absolutePath;
 }
 function createNapCatRuntimeHost(ctx) {
   const provider = createProviderDiagnostics({
@@ -9576,7 +9904,7 @@ var plugin_config_schema = [
     type: "string",
     label: "GitHub \u4ED3\u5E93 / GitHub Repo (update check)",
     description: "\u683C\u5F0F \u7528\u6237\u540D/\u4ED3\u5E93\u540D\uFF0C\u6307\u5411\u4F60\u81EA\u5DF1\u7684\u4ED3\u5E93\u624D\u80FD\u68C0\u6D4B\u5230\u4F60\u53D1\u5E03\u7684\u65B0\u7248\u672C / format owner/repo \u2014 point at your own fork to detect your own releases",
-    default: "ShiYuPIay/napcat-plugin-qq-guardian"
+    default: "qq-guardian/qq-guardian"
   }
 ];
 async function plugin_get_config(_ctx) {
@@ -9593,10 +9921,10 @@ async function plugin_get_config(_ctx) {
       intelEnabled: cfg.intel?.enabled ?? false,
       commandsEnabled: cfg.commands?.enabled ?? true,
       commandPrefix: cfg.commands?.prefix ?? "/guard",
-      githubRepo: cfg.update?.githubRepo ?? "ShiYuPIay/napcat-plugin-qq-guardian"
+      githubRepo: cfg.update?.githubRepo ?? "qq-guardian/qq-guardian"
     };
   } catch {
-    return { selfId: "0", defaultApproval: "manual", riskEnabled: true, autoKickBlacklisted: true, riskRecallMessage: false, approvalRealtimeSync: true, useBuiltinApproveKeywords: false, intelEnabled: false, commandsEnabled: true, commandPrefix: "/guard", githubRepo: "ShiYuPIay/napcat-plugin-qq-guardian" };
+    return { selfId: "0", defaultApproval: "manual", riskEnabled: true, autoKickBlacklisted: true, riskRecallMessage: false, approvalRealtimeSync: true, useBuiltinApproveKeywords: false, intelEnabled: false, commandsEnabled: true, commandPrefix: "/guard", githubRepo: "qq-guardian/qq-guardian" };
   }
 }
 async function plugin_set_config(_ctx, config) {

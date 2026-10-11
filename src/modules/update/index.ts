@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { bus } from '../../core/events/index.ts';
 import { configManager } from '../../core/config/index.ts';
@@ -8,6 +8,7 @@ import type { RuntimeKind } from '../../ports/runtime.ts';
 import { getLogger } from '../../core/logger/index.ts';
 import { withLock, locks } from '../../core/locks.ts';
 import { fetchRemote, readResponseBytes, readResponseJson, releaseRemoteResponse, writeResponseToFile } from '../../runtime/safe-fetch.ts';
+import { applyNapCatUpdateArchive } from './apply.ts';
 
 const ALLOWED_DOWNLOAD_ORIGINS = new Set([
   'github.com',
@@ -351,11 +352,9 @@ async function verifyGitHubAttestation(
   return 'mismatch';
 }
 
-/**
- * Download a verified release archive only. Extraction/restart remain an
- * explicit operator action, keeping live installs recoverable on every host.
- */
-export async function downloadUpdate(info: ReleaseInfo): Promise<void> {
+/** Download a verified release archive. NapCat installation is a separate,
+ *  tightly constrained operation; other runtimes use their native updater. */
+export async function downloadUpdate(info: ReleaseInfo, actorId: number | null = null): Promise<string> {
   const normalizedVersion = normalizeReleaseVersion(info.version);
   if (!normalizedVersion) throw new Error('Update version must be a valid semantic version');
   const downloadUrl = info.downloadUrl;
@@ -366,7 +365,7 @@ export async function downloadUpdate(info: ReleaseInfo): Promise<void> {
   validateDownloadUrl(downloadUrl);
   validateDownloadUrl(checksumUrl);
 
-  await withLock(locks.update(), async () => {
+  return withLock(locks.update(), async () => {
     const log = getLogger().child({ module: 'update' });
     const backupDir = join(getRuntimeHost().paths.dataPath, 'backups');
     mkdirSync(backupDir, { recursive: true });
@@ -387,6 +386,7 @@ export async function downloadUpdate(info: ReleaseInfo): Promise<void> {
       throw new Error(`Update download failed: HTTP ${archive.status}`);
     }
     const totalBytes = await writeResponseToFile(archive, unverifiedPath, MAX_UPDATE_BYTES);
+    let verifiedDigest = '';
 
     try {
       const checksum = await fetchRemote(checksumUrl, {}, {
@@ -405,6 +405,7 @@ export async function downloadUpdate(info: ReleaseInfo): Promise<void> {
       if (actualDigest !== expected) {
         throw new Error('Release checksum does not match the downloaded archive');
       }
+      verifiedDigest = actualDigest;
 
       // QG-002: Independent provenance check via GitHub's Sigstore attestation API.
       // The attestation is stored outside the release page (in GitHub's Sigstore
@@ -451,15 +452,61 @@ export async function downloadUpdate(info: ReleaseInfo): Promise<void> {
       throw error;
     }
 
-    log.info({ version: info.version, path: finalPath, bytes: totalBytes }, 'Verified update downloaded; extract it and restart Guardian to apply');
+    log.info({ version: info.version, path: finalPath, bytes: totalBytes }, 'Verified update downloaded for WebUI installation or explicit manual application');
     bus.emit('AuditCreated', {
       action: 'plugin.update_downloaded',
-      actorId: null,
+      actorId: actorId === null ? null : String(actorId),
       targetType: 'plugin',
       targetId: 'qq-guardian',
       details: { fromVersion: currentVersion, toVersion: info.version, downloadPath: finalPath },
       timestamp: Date.now(),
     });
+    return verifiedDigest;
+  });
+}
+
+/** Resolve the selected release from GitHub again, verify/download it, then
+ *  replace only the NapCat runtime files and retain a complete rollback copy. */
+export async function installUpdate(version: unknown, actorId: number | null = null): Promise<{ version: string; backupPath: string; files: number }> {
+  const normalizedVersion = normalizeReleaseVersion(version);
+  if (!normalizedVersion) throw new Error('Update version must be a valid semantic version');
+  const host = getRuntimeHost();
+  if (host.kind !== 'napcat') throw new Error('In-app installation is supported only for the NapCat plugin; use the standalone updater for SnowLuma');
+
+  const release = (await fetchReleases()).find((candidate) => candidate.version === normalizedVersion);
+  if (!release?.downloadUrl || !release.checksumUrl) {
+    throw new Error('This release is no longer available with a verified NapCat archive');
+  }
+  const verifiedDigest = await downloadUpdate(release, actorId);
+
+  return withLock(locks.update(), async () => {
+    const safeVersion = normalizedVersion.replace(/\+/g, '_');
+    const archivePath = join(host.paths.dataPath, 'backups', `update-${safeVersion}.zip`);
+    if (!existsSync(archivePath)) throw new Error('Verified update archive is missing; download it again');
+    const archive = readFileSync(archivePath);
+    const diskDigest = createHash('sha256').update(archive).digest('hex');
+    if (diskDigest !== verifiedDigest) {
+      throw new Error('Verified update archive changed before installation; download it again');
+    }
+    const result = applyNapCatUpdateArchive(
+      archive,
+      host.paths.pluginPath,
+      join(host.paths.dataPath, 'backups', 'update-backups'),
+      normalizedVersion,
+    );
+    getLogger().child({ module: 'update' }).info(
+      { version: normalizedVersion, backupPath: result.backupPath, files: result.files },
+      'Verified update installed; reload the QQ Guardian plugin to activate it',
+    );
+    bus.emit('AuditCreated', {
+      action: 'plugin.update_installed',
+      actorId: actorId === null ? null : String(actorId),
+      targetType: 'plugin',
+      targetId: 'qq-guardian',
+      details: { fromVersion: currentVersion, toVersion: normalizedVersion, backupPath: result.backupPath, files: result.files },
+      timestamp: Date.now(),
+    });
+    return { version: normalizedVersion, ...result };
   });
 }
 

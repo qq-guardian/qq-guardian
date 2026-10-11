@@ -114,6 +114,7 @@ Windows 和 Linux 原生安装器均支持 `--unattended` / `-Unattended`：安�
 - 人工审核默认不会信任申请人填写的“朋友推荐”等通用话术。内置通过关键词是高风险显式选项；优先使用每群自定义的可信准入规则。
 - 远端情报默认仅观察。只有超级管理员为每个 Feed 固定精确 SHA-256 并显式切换到 `enforce` 后，远端数据才可触发审核或处罚；详见 [远端情报信任策略](docs/security/intel-feeds.md)。
 - WebUI 只把符合 SemVer 的发布标签和受限的 GitHub HTTPS 地址视为可安装版本；发布说明按纯文本处理，自动下载还必须同时提供可校验的 `.sha256` 文件。
+- NapCat 超级管理员可在 WebUI 选择版本并在线安装：系统重新核对配置的 GitHub 仓库发行版本、校验 SHA-256 与归档条目，只替换固定的插件程序文件；替换前的文件备份保存在 Guardian 数据目录 `backups/update-backups/`，`config.json`、数据库和日志不参与替换。成功后须在 NapCat 插件管理器中重载 QQ Guardian，或重启 NapCat。SnowLuma 独立版请使用随发行包提供的更新器。
 - 升级、迁移或重建前保留 Guardian 的配置与数据；Docker 环境不要使用 `docker compose down -v`，它会删除持久卷。
 - 需要从旧安装迁移时，保留同一对 `config.json` 和 SQLite 数据，不要通过新建空目录来绕过启动问题。详见 [迁移与恢复说明](docs/architecture/migration.md)。
 - 在 API、配置文件或脚本中传递 QQ/群/消息 ID 时使用 JSON 字符串（例如 `"9223372036854775807"`）。QQ、群与操作人 ID 必须是无符号十进制值；消息句柄还兼容提供方使用的有符号 64 位十进制值。Guardian 只兼容仍可精确表示的旧数字输入，并拒绝已舍入数字、小数和指数形式。
