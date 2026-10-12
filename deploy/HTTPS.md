@@ -28,11 +28,11 @@ cp deploy/.env.example deploy/.env
 # OneBot token, then enable the Guardian profile with that token.
 
 docker compose --profile guardian --env-file deploy/.env \
-  -f deploy/compose.yaml \
+  -f docker-compose.yml \
   -f deploy/compose.https.yaml config
 
 docker compose --profile guardian --env-file deploy/.env \
-  -f deploy/compose.yaml \
+  -f docker-compose.yml \
   -f deploy/compose.https.yaml up -d --build
 ```
 

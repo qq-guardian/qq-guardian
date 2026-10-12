@@ -168,6 +168,10 @@ export class ApprovalService {
     await withLock(locks.approval(initial.flag), async () => {
       const rec = approvalRepo.findById(id);
       if (!rec || rec.status !== 'pending') throw new Error('Invalid approval record');
+      if (rec.expires_at <= Date.now()) {
+        approvalRepo.expirePendingIfExpired(rec.id);
+        throw new Error('Approval request has expired');
+      }
       try {
         await this._approve(rec.flag, operatorId, 'manual_operator');
       } catch (error) {
@@ -185,6 +189,10 @@ export class ApprovalService {
     await withLock(locks.approval(initial.flag), async () => {
       const rec = approvalRepo.findById(id);
       if (!rec || rec.status !== 'pending') throw new Error('Invalid approval record');
+      if (rec.expires_at <= Date.now()) {
+        approvalRepo.expirePendingIfExpired(rec.id);
+        throw new Error('Approval request has expired');
+      }
       try {
         await this._reject(rec.flag, reason, operatorId);
       } catch (error) {

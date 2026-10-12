@@ -18,8 +18,8 @@ const STAT_FIELDS: ReadonlySet<StatField> = new Set([
 ]);
 
 export class StatisticsRepository {
-  // In-memory set of "group:period" pairs already confirmed to have a DB row.
-  // Avoids a SELECT + conditional INSERT on every increment() call.
+  // In-memory set of "group:period" pairs whose row creation committed.
+  // Avoids repeating INSERT OR IGNORE for every increment() call.
   // Cleared when the date rolls over so the new day's rows are created fresh.
   private _ensuredPeriod = '';
   private readonly _ensuredKeys = new Set<string>();
@@ -29,7 +29,7 @@ export class StatisticsRepository {
     return new Date().toISOString().slice(0, 10);
   }
 
-  private ensureSnapshot(groupId: OneBotId | null, period: string): void {
+  private ensureSnapshot(groupId: OneBotId | null, period: string): string | null {
     const generation = getDatabaseGeneration();
     if (generation !== this._databaseGeneration) {
       this._ensuredKeys.clear();
@@ -42,42 +42,63 @@ export class StatisticsRepository {
       this._ensuredPeriod = period;
     }
     const key = groupId === null ? '\0' : String(groupId);
-    if (this._ensuredKeys.has(key)) return;
+    if (this._ensuredKeys.has(key)) return null;
 
-    // INSERT OR IGNORE relies on the UNIQUE(group_id, period) constraint, but
-    // SQLite treats NULL != NULL, so it never deduplicates rows where groupId
-    // is null. Use an explicit SELECT-then-INSERT instead for the null case.
     const db = getDatabase();
-    const existing =
-      groupId === null
-        ? db.prepare('SELECT 1 FROM stat_snapshots WHERE group_id IS NULL AND period = ?').get(period)
-        : db.prepare('SELECT 1 FROM stat_snapshots WHERE group_id = ? AND period = ?').get(groupId, period);
-
-    if (!existing) {
-      db.prepare(
-        `INSERT INTO stat_snapshots (group_id, period, created_at) VALUES (?, ?, ?)`
-      ).run(groupId, period, Date.now());
-    }
-    this._ensuredKeys.add(key);
+    db.prepare(
+      `INSERT OR IGNORE INTO stat_snapshots (group_id, period, created_at) VALUES (?, ?, ?)`
+    ).run(groupId, period, Date.now());
+    return key;
   }
 
-  /** Increments the per-group counter AND the global (group_id NULL) one —
-   *  the pairing every call site wants. */
-  bump(groupId: OneBotId, field: StatField): void {
-    this.increment(groupId, field);
-    this.increment(null, field);
-  }
-
-  increment(groupId: OneBotId | null, field: StatField, amount = 1): void {
-    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
-    const period = this.todayPeriod();
-    this.ensureSnapshot(groupId, period);
+  private writeIncrement(
+    groupId: OneBotId | null,
+    period: string,
+    field: StatField,
+    amount: number,
+    pendingKeys: string[],
+  ): void {
+    const key = this.ensureSnapshot(groupId, period);
+    if (key) pendingKeys.push(key);
     getDatabase()
       .prepare(
         `UPDATE stat_snapshots SET ${field} = ${field} + ?
          WHERE group_id ${groupId === null ? 'IS NULL' : '= ?'} AND period = ?`
       )
       .run(...([amount, ...(groupId !== null ? [groupId] : []), period] as SQLInputValue[]));
+  }
+
+  private withWriteTransaction(operation: (pendingKeys: string[]) => void): void {
+    const db = getDatabase();
+    const pendingKeys: string[] = [];
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      operation(pendingKeys);
+      db.exec('COMMIT');
+      for (const key of pendingKeys) this._ensuredKeys.add(key);
+    } catch (error) {
+      try { db.exec('ROLLBACK'); } catch { /* preserve the original error */ }
+      throw error;
+    }
+  }
+
+  /** Increments the per-group counter AND the global (group_id NULL) one —
+   *  the pairing every call site wants. */
+  bump(groupId: OneBotId, field: StatField): void {
+    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
+    const period = this.todayPeriod();
+    this.withWriteTransaction((pendingKeys) => {
+      this.writeIncrement(groupId, period, field, 1, pendingKeys);
+      this.writeIncrement(null, period, field, 1, pendingKeys);
+    });
+  }
+
+  increment(groupId: OneBotId | null, field: StatField, amount = 1): void {
+    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
+    const period = this.todayPeriod();
+    this.withWriteTransaction((pendingKeys) => {
+      this.writeIncrement(groupId, period, field, amount, pendingKeys);
+    });
   }
 
   findByPeriod(period: string, groupId?: OneBotId): DbStatSnapshot[] {

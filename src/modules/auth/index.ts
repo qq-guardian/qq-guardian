@@ -268,17 +268,19 @@ function consumeBootstrapAfterLogin(user: DbUser): void {
  *  any other internal state — exact failure reasons are written to the
  *  security audit log instead. */
 const GENERIC_AUTH_FAILURE = 'Invalid credentials';
+// Fixed-cost, non-user credential used to keep account lookup and lockout
+// failures on the same scrypt path as an incorrect password.
+const DUMMY_PASSWORD_HASH = 'scrypt:v2:16384:8:1:71712d677561726469616e2d64756d6d:2c26785720ced4d8270ff3c0a690b01c5d26a887df38fb986c464fcc059c8c8a';
 
 export async function login(usernameInput: string, password: string, ip: string, userAgent?: string): Promise<LoginResult> {
   const username = normalizeUsername(usernameInput);
   const config = configManager.get().auth;
   const user = username ? userRepo.findByUsername(username) : null;
+  const passwordMatches = await verifyPassword(user?.password_hash ?? DUMMY_PASSWORD_HASH, password);
   if (!user?.password_hash) return { ok: false, error: GENERIC_AUTH_FAILURE };
 
-  // Check lockout AFTER the existence check so both cases look identical to
-  // a remote caller: the account-locked path and the wrong-password path both
-  // return GENERIC_AUTH_FAILURE without a timing difference meaningful enough
-  // to serve as an oracle.
+  // Password verification happens before lockout handling so unknown, locked,
+  // and wrong-password accounts all pay the same scrypt cost.
   const now = Date.now();
   if (user.locked_until && now < user.locked_until) {
     // Log internally so operators can see the real reason, but never expose it.
@@ -286,7 +288,7 @@ export async function login(usernameInput: string, password: string, ip: string,
     return { ok: false, error: GENERIC_AUTH_FAILURE };
   }
 
-  if (!(await verifyPassword(user.password_hash, password))) {
+  if (!passwordMatches) {
     const outcome = userRepo.recordLoginFailure(user.id, config.maxLoginAttempts, now + config.lockoutSeconds * 1_000);
     auditRepo.logLogin({ userId: user.id, ip, userAgent, success: false });
     // outcome?.locked tells operators the new lockout state in the audit log

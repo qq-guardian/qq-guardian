@@ -76,11 +76,22 @@ export class ApprovalRepository {
       .run(status, operatorId, reason, captchaId, Date.now(), id);
   }
 
+  expirePendingIfExpired(id: number, now = Date.now()): boolean {
+    const result = getDatabase()
+      .prepare(
+        `UPDATE approval_records
+         SET status = 'expired', processed_at = ?
+         WHERE id = ? AND status = 'pending' AND expires_at <= ?`
+      )
+      .run(now, id, now);
+    return Number(result.changes) === 1;
+  }
+
   expireOldPending(): number {
     const result = getDatabase()
       .prepare(
         `UPDATE approval_records SET status = 'expired', processed_at = ?
-         WHERE status IN ('pending','captcha') AND expires_at < ?`
+         WHERE status IN ('pending','captcha') AND expires_at <= ?`
       )
       .run(Date.now(), Date.now());
     return Number(result.changes);

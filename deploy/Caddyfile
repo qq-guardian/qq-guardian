@@ -1,5 +1,5 @@
 {$GUARDIAN_DOMAIN} {
   encode zstd gzip
 
-  reverse_proxy guardian:6099
+  reverse_proxy qq-guardian:6099
 }

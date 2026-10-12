@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const BASE = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:6099';
+const BASE = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT ?? '6099'}`;
 const API = `${BASE}/plugin/napcat-plugin-qq-guardian/api`;
 
 async function seedAndLogin(page: import('@playwright/test').Page) {

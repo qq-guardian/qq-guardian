@@ -27,11 +27,12 @@ afterEach(() => {
 function responseCapture() {
   let statusCode = 200;
   let payload: unknown;
+  const headers: Record<string, string> = {};
   const response: GuardianHttpResponse = {
     status(code) { statusCode = code; return response; },
     json(data) { payload = data; },
     send(data) { payload = data; },
-    setHeader() { return response; },
+    setHeader(name, value) { headers[name.toLowerCase()] = value; return response; },
     sendFile() {},
     redirect() {},
     raw: null,
@@ -39,6 +40,7 @@ function responseCapture() {
   return {
     response,
     read: () => ({ statusCode, payload }),
+    getHeader: (name: string) => headers[name.toLowerCase()],
   };
 }
 
@@ -133,5 +135,78 @@ describe('user-management API invariant', () => {
       statusCode: 400,
       payload: { code: -1, message: 'Cannot delete your own account' },
     });
+  });
+
+  it('keeps refresh credentials out of JSON and rotates them only in HttpOnly cookies', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'guardian-auth-api-'));
+    roots.push(root);
+    const dataDir = join(root, 'data');
+    const configDir = join(root, 'config');
+    configManager.init(configDir);
+    openDatabase(dataDir);
+
+    const routes = new Map<string, GuardianRequestHandler>();
+    const route = (method: string) =>
+      (path: string, handler: GuardianRequestHandler) => routes.set(`${method} ${path}`, handler);
+    setRuntimeHost({
+      kind: 'snowluma',
+      pluginId: 'test',
+      paths: { pluginPath: root, dataPath: dataDir, configDir },
+      logger: console,
+      onebot: { call: async () => null },
+      router: {
+        getNoAuth: route('GET'),
+        postNoAuth: route('POST'),
+        putNoAuth: route('PUT'),
+        deleteNoAuth: route('DELETE'),
+      } as never,
+    });
+    insertUserFixture({
+      username: 'cookie-operator',
+      passwordHash: await hashPassword('Cookie-Operator-Password-123!'),
+      role: 'super_admin',
+    });
+    registerRoutes();
+
+    const loginCapture = responseCapture();
+    await routes.get('POST /auth/login')!({
+      path: '', method: 'POST', query: {},
+      body: { username: 'cookie-operator', password: 'Cookie-Operator-Password-123!' },
+      headers: { 'user-agent': 'auth-api-regression-test' }, params: {}, raw: null,
+    }, loginCapture.response, () => {});
+    assert.equal(loginCapture.read().statusCode, 200);
+    const loginBody = loginCapture.read().payload as { data: Record<string, unknown> };
+    assert.equal(typeof loginBody.data['accessToken'], 'string');
+    assert.equal('refreshToken' in loginBody.data, false);
+    const initialCookie = loginCapture.getHeader('set-cookie');
+    assert.ok(initialCookie);
+    assert.ok(initialCookie.includes('HttpOnly'));
+    const initialPair = initialCookie.split(';', 1)[0]!;
+    const initialToken = decodeURIComponent(initialPair.slice('qqg_refresh='.length));
+
+    const refreshCapture = responseCapture();
+    await routes.get('POST /auth/refresh')!({
+      path: '', method: 'POST', query: {}, body: {},
+      headers: { cookie: initialPair }, params: {}, raw: null,
+    }, refreshCapture.response, () => {});
+    assert.equal(refreshCapture.read().statusCode, 200);
+    const refreshBody = refreshCapture.read().payload as { data: Record<string, unknown> };
+    assert.equal(typeof refreshBody.data['accessToken'], 'string');
+    assert.equal('refreshToken' in refreshBody.data, false);
+    const rotatedCookie = refreshCapture.getHeader('set-cookie');
+    assert.ok(rotatedCookie);
+    assert.ok(rotatedCookie.includes('HttpOnly'));
+    const rotatedPair = rotatedCookie.split(';', 1)[0]!;
+    assert.notEqual(
+      decodeURIComponent(rotatedPair.slice('qqg_refresh='.length)),
+      initialToken,
+    );
+
+    const replayCapture = responseCapture();
+    await routes.get('POST /auth/refresh')!({
+      path: '', method: 'POST', query: {}, body: {},
+      headers: { cookie: initialPair }, params: {}, raw: null,
+    }, replayCapture.response, () => {});
+    assert.equal(replayCapture.read().statusCode, 401);
   });
 });

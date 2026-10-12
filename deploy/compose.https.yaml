@@ -1,0 +1,22 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    profiles: [guardian]
+    restart: unless-stopped
+    environment:
+      GUARDIAN_DOMAIN: ${GUARDIAN_DOMAIN:?set GUARDIAN_DOMAIN in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - guardian-caddy-data:/data
+      - guardian-caddy-config:/config
+    depends_on:
+      qq-guardian:
+        condition: service_started
+
+volumes:
+  guardian-caddy-data:
+  guardian-caddy-config:

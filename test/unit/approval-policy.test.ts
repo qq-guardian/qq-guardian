@@ -187,3 +187,34 @@ test('NapCat and SnowLuma request fixtures keep referral claims manual and audit
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('manual decisions expire stale requests instead of sending late OneBot actions', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'guardian-expired-approval-'));
+  const calls: OneBotCall[] = [];
+  const runtime = host(root, 'napcat', calls);
+
+  try {
+    setRuntimeHost(runtime);
+    configManager.init(runtime.paths.configDir);
+    openDatabase(runtime.paths.dataPath);
+    const expiredApproval = approvalRepo.create({
+      groupId: '10001', userId: '20001', flag: 'expired-approve',
+      comment: '', status: 'pending', ttlSeconds: -1,
+    });
+    const expiredRejection = approvalRepo.create({
+      groupId: '10001', userId: '20002', flag: 'expired-reject',
+      comment: '', status: 'pending', ttlSeconds: -1,
+    });
+
+    await assert.rejects(approvalService.approveManually(expiredApproval.id, 'operator-1'), /expired/i);
+    await assert.rejects(approvalService.rejectManually(expiredRejection.id, 'operator-1', 'late'), /expired/i);
+
+    assert.equal(approvalRepo.findById(expiredApproval.id)?.status, 'expired');
+    assert.equal(approvalRepo.findById(expiredRejection.id)?.status, 'expired');
+    assert.equal(calls.length, 0);
+  } finally {
+    closeDatabase();
+    clearRuntimeHost();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

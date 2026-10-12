@@ -270,6 +270,26 @@ async function sha256File(path: string): Promise<string> {
   return hash.digest('hex');
 }
 
+export function matchesGitHubRepositoryUri(candidate: string, repository: string): boolean {
+  const [owner, name, extra] = repository.split('/');
+  if (!owner || !name || extra !== undefined) return false;
+  try {
+    const url = new URL(candidate);
+    const segments = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    return url.origin.toLowerCase() === 'https://github.com'
+      && !url.username
+      && !url.password
+      && !url.port
+      && !url.search
+      && !url.hash
+      && segments.length === 2
+      && segments[0]!.toLowerCase() === owner.toLowerCase()
+      && segments[1]!.toLowerCase() === name.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 /**
  * QG-002: Independently verify a release artifact using GitHub's attestation API.
  *
@@ -310,9 +330,6 @@ async function verifyGitHubAttestation(
   if (!Array.isArray(attestations)) throw new Error('Attestation API response.attestations is not an array');
   if (attestations.length === 0) return 'none';
 
-  const [owner, name] = repo.split('/');
-  const expectedRepoUri = `https://github.com/${owner}/${name}`;
-
   for (const entry of attestations) {
     if (!entry || typeof entry !== 'object') continue;
     const bundle = (entry as Record<string, unknown>)['bundle'];
@@ -341,7 +358,7 @@ async function verifyGitHubAttestation(
         const workflow = (extParams as Record<string, unknown>)['workflow'];
         if (workflow && typeof workflow === 'object') {
           const repoUri = (workflow as Record<string, unknown>)['repository'];
-          if (typeof repoUri === 'string' && repoUri.startsWith(expectedRepoUri)) {
+          if (typeof repoUri === 'string' && matchesGitHubRepositoryUri(repoUri, repo)) {
             return 'verified';
           }
         }
@@ -511,13 +528,45 @@ export async function installUpdate(version: unknown, actorId: number | null = n
 }
 
 export function isNewerVersion(latest: string, current: string): boolean {
-  const parse = (value: string): [number, number, number] => {
-    const parts = value.split('.').map((part) => Math.max(0, Number.parseInt(part, 10) || 0));
-    return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+  const parse = (value: string): { core: [number, number, number]; prerelease: string[] | null } | null => {
+    const normalized = normalizeReleaseVersion(value);
+    if (!normalized) return null;
+    const withoutBuild = normalized.split('+', 1)[0]!;
+    const prereleaseIndex = withoutBuild.indexOf('-');
+    const coreText = prereleaseIndex < 0 ? withoutBuild : withoutBuild.slice(0, prereleaseIndex);
+    const prerelease = prereleaseIndex < 0 ? null : withoutBuild.slice(prereleaseIndex + 1).split('.');
+    const core = coreText.split('.').map(Number);
+    return core.length === 3
+      ? { core: [core[0]!, core[1]!, core[2]!], prerelease }
+      : null;
   };
-  const [latestMajor, latestMinor, latestPatch] = parse(latest);
-  const [currentMajor, currentMinor, currentPatch] = parse(current);
-  if (latestMajor !== currentMajor) return latestMajor > currentMajor;
-  if (latestMinor !== currentMinor) return latestMinor > currentMinor;
-  return latestPatch > currentPatch;
+
+  const latestVersion = parse(latest);
+  const currentVersion = parse(current);
+  if (!latestVersion || !currentVersion) return false;
+  for (let index = 0; index < 3; index += 1) {
+    if (latestVersion.core[index] !== currentVersion.core[index]) {
+      return latestVersion.core[index]! > currentVersion.core[index]!;
+    }
+  }
+  if (!latestVersion.prerelease) return Boolean(currentVersion.prerelease);
+  if (!currentVersion.prerelease) return false;
+
+  const latestIds = latestVersion.prerelease;
+  const currentIds = currentVersion.prerelease;
+  const length = Math.min(latestIds.length, currentIds.length);
+  for (let index = 0; index < length; index += 1) {
+    const latestId = latestIds[index]!;
+    const currentId = currentIds[index]!;
+    if (latestId === currentId) continue;
+    const latestNumeric = /^\d+$/.test(latestId);
+    const currentNumeric = /^\d+$/.test(currentId);
+    if (latestNumeric && currentNumeric) {
+      if (latestId.length !== currentId.length) return latestId.length > currentId.length;
+      return latestId > currentId;
+    }
+    if (latestNumeric !== currentNumeric) return !latestNumeric;
+    return latestId > currentId;
+  }
+  return latestIds.length > currentIds.length;
 }

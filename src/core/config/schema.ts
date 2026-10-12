@@ -3,6 +3,7 @@ import { parseBoolean } from './boolean.ts';
 import { normalizeIntelFeedUrls } from './intel.ts';
 import type { GroupApprovalConfig, PluginConfig, RiskDetectorAction } from './types.ts';
 import { hasAmbiguousQuantifiedAlternation, probePatternsInWorkers } from '../regex/index.ts';
+import { isValidIpCidr } from '../net/ip-cidr.ts';
 import { normalizeOneBotId, type OneBotId } from '../../types/onebot.ts';
 
 /** The only configuration format accepted by the normal runtime. */
@@ -276,6 +277,14 @@ function asStringArray(value: unknown, path: string, maxItems = 100, maxItemLeng
   if (!Array.isArray(value)) fail(path, 'must be an array');
   if (value.length > maxItems) fail(path, `must contain at most ${maxItems} entries`);
   return value.map((entry, index) => asString(entry, `${path}[${index}]`, 0, maxItemLength));
+}
+
+function asIpCidrArray(value: unknown, path: string, maxItems: number): string[] {
+  const entries = asStringArray(value, path, maxItems, 128);
+  entries.forEach((entry, index) => {
+    if (!isValidIpCidr(entry)) fail(`${path}[${index}]`, 'must be a valid IPv4/IPv6 address or CIDR');
+  });
+  return entries;
 }
 
 function assertUrl(value: string, path: string, allowedProtocols: readonly string[]): void {
@@ -667,7 +676,7 @@ function normalizeConfig(value: unknown, allowLegacyScalars: boolean): PluginCon
   assertKnownKeys(auth, ['maxLoginAttempts', 'lockoutSeconds', 'rateLimitRequests', 'rateLimitWindowMs', 'trustedProxyCidrs'], 'config.auth');
   // Backwards-compatible default: configs written before trustedProxyCidrs was
   // introduced did not have this field.  Default to empty (safest).
-  if (!Array.isArray(auth.trustedProxyCidrs)) auth.trustedProxyCidrs = [];
+  if (auth.trustedProxyCidrs === undefined) auth.trustedProxyCidrs = [];
   const monitor = asRecord(config.monitor, 'config.monitor');
   assertKnownKeys(monitor, ['intervalMs', 'diskAlertMb', 'memoryAlertPercent'], 'config.monitor');
   const update = asRecord(config.update, 'config.update');
@@ -750,7 +759,7 @@ function normalizeConfig(value: unknown, allowLegacyScalars: boolean): PluginCon
       lockoutSeconds: asNumber(auth.lockoutSeconds, 'config.auth.lockoutSeconds', allowLegacyScalars, 1, 30 * 24 * 60 * 60),
       rateLimitRequests: asNumber(auth.rateLimitRequests, 'config.auth.rateLimitRequests', allowLegacyScalars, 1, 100_000),
       rateLimitWindowMs: asNumber(auth.rateLimitWindowMs, 'config.auth.rateLimitWindowMs', allowLegacyScalars, 1000, 24 * 60 * 60 * 1000),
-      trustedProxyCidrs: asStringArray(auth.trustedProxyCidrs, 'config.auth.trustedProxyCidrs', 256, 128),
+      trustedProxyCidrs: asIpCidrArray(auth.trustedProxyCidrs, 'config.auth.trustedProxyCidrs', 256),
     },
     monitor: {
       intervalMs: asNumber(monitor.intervalMs, 'config.monitor.intervalMs', allowLegacyScalars, 1000, 24 * 60 * 60 * 1000),

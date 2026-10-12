@@ -68,4 +68,15 @@ describe('production workflow governance', () => {
     assert.match(source, /packages: write/);
     assert.match(source, /actions\/attest@[0-9a-f]{40} # v4/);
   });
+
+  it('runs browser smoke tests against an automatically started deterministic WebUI fixture', () => {
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    assert.equal(manifest.scripts['test:webui'], 'playwright test --config=playwright.config.ts');
+    const config = readFileSync(join(root, 'playwright.config.ts'), 'utf8');
+    assert.match(config, /scripts\/webui-smoke-server\.mjs/);
+    assert.match(config, /webServer:/);
+    const workflow = readFileSync(join(root, '.github/workflows/test.yml'), 'utf8');
+    assert.match(workflow, /pnpm exec playwright install --with-deps chromium/);
+    assert.match(workflow, /pnpm run test:webui/);
+  });
 });

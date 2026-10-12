@@ -6,36 +6,21 @@ import assert from 'node:assert/strict';
 import { writeFileSync, existsSync, mkdtempSync, rmSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { buildDefaults } from '../../src/core/config/defaults.ts';
 import { validateCanonicalConfig } from '../../src/core/config/schema.ts';
 import { configManager, ConfigManager } from '../../src/core/config/index.ts';
+import { ipMatchesCidr } from '../../src/core/net/ip-cidr.ts';
+import { resolveClientIp } from '../../src/api/client-ip.ts';
+import { insertUserFixture } from '../helpers/user-fixtures.ts';
+import type { GuardianHttpRequest } from '../../src/ports/http.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // ─── QG-003: CIDR matching logic ─────────────────────────────────────────────
 
 describe('QG-003: CIDR membership — ipMatchesCidr logic', () => {
-  // Inline copy of the production function for isolated unit testing.
-  function ipMatchesCidr(ip: string, cidr: string): boolean {
-    try {
-      const [network, prefix] = cidr.includes('/') ? cidr.split('/') : [cidr, undefined];
-      const prefixLen = prefix !== undefined ? parseInt(prefix, 10) : undefined;
-      if (prefixLen === undefined) return ip.trim() === (network ?? '').trim();
-      if (!(network ?? '').includes(':')) {
-        const ipParts = ip.split('.').map(Number);
-        const netParts = (network ?? '').split('.').map(Number);
-        if (ipParts.length !== 4 || netParts.length !== 4) return false;
-        if (ipParts.some(Number.isNaN) || netParts.some(Number.isNaN)) return false;
-        const ipNum = (ipParts[0]! << 24) | (ipParts[1]! << 16) | (ipParts[2]! << 8) | ipParts[3]!;
-        const netNum = (netParts[0]! << 24) | (netParts[1]! << 16) | (netParts[2]! << 8) | netParts[3]!;
-        const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
-        return (ipNum >>> 0 & mask) === (netNum >>> 0 & mask);
-      }
-      return ip.trim().toLowerCase() === (network ?? '').trim().toLowerCase();
-    } catch { return false; }
-  }
-
   it('matches bare addresses by equality', () => {
     assert.equal(ipMatchesCidr('10.0.0.1', '10.0.0.1'), true);
     assert.equal(ipMatchesCidr('10.0.0.2', '10.0.0.1'), false);
@@ -68,18 +53,46 @@ describe('QG-003: CIDR membership — ipMatchesCidr logic', () => {
     assert.equal(ipMatchesCidr('192.168.1.1', '0.0.0.0/0'), true);
   });
 
-  it('empty trustedProxyCidrs never trusts any header (secure default)', () => {
-    const cidrs: string[] = [];
-    assert.equal(
-      cidrs.some(c => ipMatchesCidr('1.2.3.4', c)), false,
-      'Empty CIDR list must not trust a spoofed forwarding header',
-    );
+  it('supports IPv6 CIDR and rejects malformed addresses or out-of-range prefixes', () => {
+    assert.equal(ipMatchesCidr('2001:db8::1', '2001:db8::/32'), true);
+    assert.equal(ipMatchesCidr('2001:dead::1', '2001:db8::/32'), false);
+    assert.equal(ipMatchesCidr('10.0.0.1', '10.0.0.0/33'), false);
+    assert.equal(ipMatchesCidr('10.0.0.1', '10.0.0.0/not-a-prefix'), false);
+    assert.equal(ipMatchesCidr('999.0.0.1', '999.0.0.0/8'), false);
+  });
+});
+
+describe('QG-003: rate-limit client identity requires a trusted socket peer', () => {
+  const request = (
+    headers: GuardianHttpRequest['headers'],
+    raw: unknown = null,
+  ): GuardianHttpRequest => ({ headers, raw } as GuardianHttpRequest);
+
+  it('ignores spoofed forwarding headers when the host exposes no raw peer', () => {
+    assert.equal(resolveClientIp(request({
+      'x-forwarded-for': '198.51.100.7',
+      'x-real-ip': '198.51.100.7',
+    }), ['127.0.0.1']), '127.0.0.1');
   });
 
-  it('trusts only proxies within the configured CIDR', () => {
-    const cidrs = ['127.0.0.1', '10.0.0.0/8'];
-    assert.equal(cidrs.some(c => ipMatchesCidr('10.5.0.1', c)), true);
-    assert.equal(cidrs.some(c => ipMatchesCidr('11.0.0.1', c)), false);
+  it('ignores a forged proxy chain when the actual peer is not trusted', () => {
+    assert.equal(resolveClientIp(request(
+      { 'x-forwarded-for': '198.51.100.7, 10.0.0.9' },
+      { socket: { remoteAddress: '203.0.113.12' } },
+    ), ['10.0.0.0/8']), '127.0.0.1');
+  });
+
+  it('walks a trusted proxy chain from the socket peer and skips client-prepended values', () => {
+    assert.equal(resolveClientIp(request(
+      { 'x-forwarded-for': '198.51.100.99, 203.0.113.7, 10.0.0.3' },
+      { socket: { remoteAddress: '10.0.0.2' } },
+    ), ['10.0.0.0/8']), '203.0.113.7');
+  });
+
+  it('fails closed on malformed forwarded chains or chains containing only trusted peers', () => {
+    const peer = { socket: { remoteAddress: '10.0.0.2' } };
+    assert.equal(resolveClientIp(request({ 'x-forwarded-for': 'spoofed, 203.0.113.7' }, peer), ['10.0.0.0/8']), '127.0.0.1');
+    assert.equal(resolveClientIp(request({ 'x-forwarded-for': '10.0.0.3' }, peer), ['10.0.0.0/8']), '127.0.0.1');
   });
 });
 
@@ -95,6 +108,32 @@ describe('QG-003: auth.trustedProxyCidrs validates and back-fills correctly', ()
       auth: { ...buildDefaults().auth, trustedProxyCidrs: ['127.0.0.1', '10.0.0.0/8', '172.16.0.0/12'] },
     });
     assert.deepEqual(cfg.auth.trustedProxyCidrs, ['127.0.0.1', '10.0.0.0/8', '172.16.0.0/12']);
+  });
+
+  it('rejects malformed IPv4/IPv6 addresses and non-canonical or out-of-range prefixes', () => {
+    for (const cidr of [
+      '10.0.0.0/8junk',
+      '10.0.0.0/33',
+      '10..0.1/8',
+      '10.0.0.1/08',
+      '2001:db8::/129',
+      '2001:db8::/64/1',
+      ' 10.0.0.1',
+    ]) {
+      assert.throws(() => validateCanonicalConfig({
+        ...buildDefaults(),
+        auth: { ...buildDefaults().auth, trustedProxyCidrs: [cidr] },
+      }), /trustedProxyCidrs/);
+    }
+    const ipv6 = validateCanonicalConfig({
+      ...buildDefaults(),
+      auth: { ...buildDefaults().auth, trustedProxyCidrs: ['2001:db8::/32'] },
+    });
+    assert.deepEqual(ipv6.auth.trustedProxyCidrs, ['2001:db8::/32']);
+    assert.throws(() => validateCanonicalConfig({
+      ...buildDefaults(),
+      auth: { ...buildDefaults().auth, trustedProxyCidrs: '127.0.0.1' as unknown as string[] },
+    }), /trustedProxyCidrs/);
   });
 
   it('back-fills default for old config files without the field', () => {
@@ -165,6 +204,40 @@ describe('QG-004: login() returns identical external message for locked vs inval
       'Locked account must return the same generic message — not "Account temporarily locked"');
     assert.notEqual(result.error, 'Account temporarily locked',
       'The locked-state string must never be visible externally');
+  });
+
+  it('keeps median failure time comparable for missing, wrong-password, and locked users', async () => {
+    const { hashPassword } = await import('../../src/core/crypto/index.ts');
+    const { userRepo } = await import('../../src/database/repositories/user.ts');
+    const { login } = await import('../../src/modules/auth/index.ts');
+    configManager.update({ auth: { maxLoginAttempts: 100 } });
+    insertUserFixture({
+      username: 'timingtest', role: 'viewer', passwordHash: await hashPassword('correct'),
+    });
+    insertUserFixture({
+      username: 'timinglocked', role: 'viewer', passwordHash: await hashPassword('correct'),
+    });
+    const lockedUser = userRepo.findByUsername('timinglocked');
+    assert.ok(lockedUser);
+    userRepo.updateAuthenticationState(lockedUser.id, { loginAttempts: 5, lockedUntil: Date.now() + 60_000 });
+
+    const measure = async (username: string, password: string): Promise<number[]> => {
+      const samples: number[] = [];
+      for (let index = 0; index < 5; index += 1) {
+        const start = performance.now();
+        await login(username, password, '127.0.0.1');
+        samples.push(performance.now() - start);
+      }
+      return samples.sort((left, right) => left - right);
+    };
+    const missing = await measure('timingmissing', 'wrong');
+    const wrongPassword = await measure('timingtest', 'wrong');
+    const locked = await measure('timinglocked', 'wrong');
+    const medians = [missing[2]!, wrongPassword[2]!, locked[2]!];
+    const fastest = Math.min(...medians);
+    const slowest = Math.max(...medians);
+    assert.ok(fastest > 0);
+    assert.ok(slowest / fastest <= 4, `failure medians diverged: ${medians.map((value) => value.toFixed(1)).join(', ')}ms`);
   });
 });
 

@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   downloadUpdate,
+  isNewerVersion,
+  matchesGitHubRepositoryUri,
   normalizeGitHubRelease,
   normalizeReleaseVersion,
   validateDownloadUrl,
@@ -262,5 +264,25 @@ describe('release metadata trust boundary', () => {
       releaseUrl: 'https://github.com/owner/repo/releases/tag/v1.2.3',
       releaseNotes: '',
     }), /semantic version/);
+  });
+
+  it('compares stable and prerelease tags using SemVer precedence', () => {
+    assert.equal(isNewerVersion('1.2.3', '1.2.3-rc.9'), true);
+    assert.equal(isNewerVersion('1.2.3-rc.10', '1.2.3-rc.2'), true);
+    assert.equal(isNewerVersion('1.2.3-beta', '1.2.3-alpha'), true);
+    assert.equal(isNewerVersion('1.2.3-alpha.1', '1.2.3-alpha'), true);
+    assert.equal(isNewerVersion('1.9.0', '1.10.0'), false);
+    assert.equal(isNewerVersion('1.2.3+build.2', '1.2.3+build.1'), false);
+    assert.equal(isNewerVersion('1.2.3-rc.1', '1.2.3'), false);
+    assert.equal(isNewerVersion('invalid', '1.2.3'), false);
+  });
+
+  it('accepts only the exact configured GitHub repository URI for attestations', () => {
+    assert.equal(matchesGitHubRepositoryUri('https://github.com/Owner/Repo', 'owner/repo'), true);
+    assert.equal(matchesGitHubRepositoryUri('https://github.com/owner/repo-malicious', 'owner/repo'), false);
+    assert.equal(matchesGitHubRepositoryUri('https://github.com/owner/repo/extra', 'owner/repo'), false);
+    assert.equal(matchesGitHubRepositoryUri('https://evil.example/owner/repo', 'owner/repo'), false);
+    assert.equal(matchesGitHubRepositoryUri('https://github.com.evil.example/owner/repo', 'owner/repo'), false);
+    assert.equal(matchesGitHubRepositoryUri('https://github.com/owner/repo?redirect=evil', 'owner/repo'), false);
   });
 });

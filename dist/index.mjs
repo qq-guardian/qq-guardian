@@ -810,6 +810,54 @@ function up6(db) {
   `);
 }
 
+// src/database/migrations/007_statistics_snapshot_uniqueness.ts
+var statistics_snapshot_uniqueness_exports = {};
+__export(statistics_snapshot_uniqueness_exports, {
+  description: () => description7,
+  up: () => up7,
+  version: () => version7
+});
+var version7 = 7;
+var description7 = "Deduplicate statistic snapshots and enforce one global row per period";
+function up7(db) {
+  db.exec(`
+    CREATE TEMP TABLE stat_snapshots_deduplicated AS
+      SELECT
+        MIN(id) AS id,
+        group_id,
+        period,
+        SUM(approvals_total) AS approvals_total,
+        SUM(approvals_passed) AS approvals_passed,
+        SUM(approvals_rejected) AS approvals_rejected,
+        SUM(captchas_total) AS captchas_total,
+        SUM(captchas_passed) AS captchas_passed,
+        SUM(punishments_total) AS punishments_total,
+        SUM(risk_detections) AS risk_detections,
+        MIN(created_at) AS created_at
+      FROM stat_snapshots
+      GROUP BY group_id, period;
+
+    DELETE FROM stat_snapshots;
+
+    INSERT INTO stat_snapshots (
+      id, group_id, period, approvals_total, approvals_passed,
+      approvals_rejected, captchas_total, captchas_passed,
+      punishments_total, risk_detections, created_at
+    )
+    SELECT
+      id, group_id, period, approvals_total, approvals_passed,
+      approvals_rejected, captchas_total, captchas_passed,
+      punishments_total, risk_detections, created_at
+    FROM stat_snapshots_deduplicated;
+
+    DROP TABLE stat_snapshots_deduplicated;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_stat_snapshots_global_period
+      ON stat_snapshots(period)
+      WHERE group_id IS NULL;
+  `);
+}
+
 // src/runtime/provider-telemetry.ts
 import { randomUUID } from "node:crypto";
 var MAX_LABEL_LENGTH = 64;
@@ -1197,8 +1245,8 @@ function getLogger() {
 }
 
 // src/database/migrations/index.ts
-var DATABASE_SCHEMA_VERSION = 6;
-var MIGRATIONS = [initial_exports, captcha_index_exports, risk_rule_action_exports, canonical_storage_exports, onebot_identifiers_exports, login_rate_limits_exports];
+var DATABASE_SCHEMA_VERSION = 7;
+var MIGRATIONS = [initial_exports, captcha_index_exports, risk_rule_action_exports, canonical_storage_exports, onebot_identifiers_exports, login_rate_limits_exports, statistics_snapshot_uniqueness_exports];
 function runMigrations(db) {
   const log = getLogger().child({ module: "migrations" });
   db.exec(`
@@ -1312,10 +1360,18 @@ var ApprovalRepository = class {
          WHERE id = ?`
     ).run(status, operatorId2, reason, captchaId, Date.now(), id);
   }
+  expirePendingIfExpired(id, now = Date.now()) {
+    const result = getDatabase().prepare(
+      `UPDATE approval_records
+         SET status = 'expired', processed_at = ?
+         WHERE id = ? AND status = 'pending' AND expires_at <= ?`
+    ).run(now, id, now);
+    return Number(result.changes) === 1;
+  }
   expireOldPending() {
     const result = getDatabase().prepare(
       `UPDATE approval_records SET status = 'expired', processed_at = ?
-         WHERE status IN ('pending','captcha') AND expires_at < ?`
+         WHERE status IN ('pending','captcha') AND expires_at <= ?`
     ).run(Date.now(), Date.now());
     return Number(result.changes);
   }
@@ -1652,6 +1708,51 @@ async function validateRegexPattern(pattern) {
   }
 }
 
+// src/core/net/ip-cidr.ts
+import { BlockList, isIP } from "node:net";
+function ipFamilyOf(address) {
+  const family = isIP(address);
+  return family === 4 ? "ipv4" : family === 6 ? "ipv6" : null;
+}
+function parseIpCidr(cidr) {
+  if (cidr.length === 0 || cidr !== cidr.trim()) return null;
+  const parts = cidr.split("/");
+  if (parts.length < 1 || parts.length > 2) return null;
+  const network = parts[0];
+  const family = ipFamilyOf(network);
+  if (!family) return null;
+  if (parts.length === 1) return { network, family };
+  const prefix = parts[1];
+  if (!/^(?:0|[1-9]\d*)$/.test(prefix)) return null;
+  const prefixLength = Number(prefix);
+  const maxPrefix = family === "ipv4" ? 32 : 128;
+  if (!Number.isSafeInteger(prefixLength) || prefixLength > maxPrefix) return null;
+  try {
+    new BlockList().addSubnet(network, prefixLength, family);
+  } catch {
+    return null;
+  }
+  return { network, family, prefixLength };
+}
+function isValidIpCidr(cidr) {
+  return parseIpCidr(cidr) !== null;
+}
+function ipMatchesCidr(address, cidr) {
+  const parsed = parseIpCidr(cidr);
+  if (!parsed || ipFamilyOf(address) !== parsed.family) return false;
+  try {
+    const list = new BlockList();
+    if (parsed.prefixLength === void 0) {
+      list.addAddress(parsed.network, parsed.family);
+    } else {
+      list.addSubnet(parsed.network, parsed.prefixLength, parsed.family);
+    }
+    return list.check(address, parsed.family);
+  } catch {
+    return false;
+  }
+}
+
 // src/core/config/schema.ts
 var CONFIG_SCHEMA_VERSION = 6;
 var CONFIG_FILENAME = "config.json";
@@ -1714,9 +1815,9 @@ function asRecord(value, path) {
   }
   return value;
 }
-function assertKnownKeys(record2, allowed, path) {
+function assertKnownKeys(record3, allowed, path) {
   const allowedKeys = new Set(allowed);
-  for (const key of Object.keys(record2)) {
+  for (const key of Object.keys(record3)) {
     if (UNSAFE_KEYS.has(key)) fail(path, `contains unsafe key ${JSON.stringify(key)}`);
     if (!allowedKeys.has(key)) fail(path, `contains unsupported key ${JSON.stringify(key)}`);
   }
@@ -1853,6 +1954,13 @@ function asStringArray(value, path, maxItems = 100, maxItemLength = 1024) {
   if (value.length > maxItems) fail(path, `must contain at most ${maxItems} entries`);
   return value.map((entry, index) => asString(entry, `${path}[${index}]`, 0, maxItemLength));
 }
+function asIpCidrArray(value, path, maxItems) {
+  const entries = asStringArray(value, path, maxItems, 128);
+  entries.forEach((entry, index) => {
+    if (!isValidIpCidr(entry)) fail(`${path}[${index}]`, "must be a valid IPv4/IPv6 address or CIDR");
+  });
+  return entries;
+}
 function assertUrl(value, path, allowedProtocols) {
   let parsed;
   try {
@@ -1953,14 +2061,14 @@ function mergeConfigValues(target, source) {
   }
   return result;
 }
-function captureUnknownFields(record2, allowed, displayPath, pointer, preserved) {
+function captureUnknownFields(record3, allowed, displayPath, pointer, preserved) {
   const allowedKeys = new Set(allowed);
-  for (const key of Object.keys(record2)) {
+  for (const key of Object.keys(record3)) {
     if (UNSAFE_KEYS.has(key)) fail(displayPath, `contains unsafe key ${JSON.stringify(key)}`);
     if (allowedKeys.has(key)) continue;
     const path = appendJsonPointer(pointer, key);
-    preserved[path] = record2[key];
-    delete record2[key];
+    preserved[path] = record3[key];
+    delete record3[key];
   }
 }
 function captureLegacyConfigExtensions(candidate) {
@@ -2000,8 +2108,8 @@ function captureLegacyConfigExtensions(candidate) {
   ];
   for (const [section, allowed] of sections) {
     if (candidate[section] === void 0) continue;
-    const record2 = asRecord(candidate[section], `config.${section}`);
-    captureUnknownFields(record2, allowed, `config.${section}`, `/config/${section}`, preserved);
+    const record3 = asRecord(candidate[section], `config.${section}`);
+    captureUnknownFields(record3, allowed, `config.${section}`, `/config/${section}`, preserved);
   }
   const approval = candidate.approval;
   if (approval?.groups !== void 0) {
@@ -2216,7 +2324,7 @@ function normalizeConfig(value, allowLegacyScalars) {
   assertKnownKeys(blacklist, ["autoKickOnJoin"], "config.blacklist");
   const auth = asRecord(config.auth, "config.auth");
   assertKnownKeys(auth, ["maxLoginAttempts", "lockoutSeconds", "rateLimitRequests", "rateLimitWindowMs", "trustedProxyCidrs"], "config.auth");
-  if (!Array.isArray(auth.trustedProxyCidrs)) auth.trustedProxyCidrs = [];
+  if (auth.trustedProxyCidrs === void 0) auth.trustedProxyCidrs = [];
   const monitor = asRecord(config.monitor, "config.monitor");
   assertKnownKeys(monitor, ["intervalMs", "diskAlertMb", "memoryAlertPercent"], "config.monitor");
   const update = asRecord(config.update, "config.update");
@@ -2298,7 +2406,7 @@ function normalizeConfig(value, allowLegacyScalars) {
       lockoutSeconds: asNumber(auth.lockoutSeconds, "config.auth.lockoutSeconds", allowLegacyScalars, 1, 30 * 24 * 60 * 60),
       rateLimitRequests: asNumber(auth.rateLimitRequests, "config.auth.rateLimitRequests", allowLegacyScalars, 1, 1e5),
       rateLimitWindowMs: asNumber(auth.rateLimitWindowMs, "config.auth.rateLimitWindowMs", allowLegacyScalars, 1e3, 24 * 60 * 60 * 1e3),
-      trustedProxyCidrs: asStringArray(auth.trustedProxyCidrs, "config.auth.trustedProxyCidrs", 256, 128)
+      trustedProxyCidrs: asIpCidrArray(auth.trustedProxyCidrs, "config.auth.trustedProxyCidrs", 256)
     },
     monitor: {
       intervalMs: asNumber(monitor.intervalMs, "config.monitor.intervalMs", allowLegacyScalars, 1e3, 24 * 60 * 60 * 1e3),
@@ -2691,8 +2799,8 @@ var STAT_FIELDS = /* @__PURE__ */ new Set([
   "risk_detections"
 ]);
 var StatisticsRepository = class {
-  // In-memory set of "group:period" pairs already confirmed to have a DB row.
-  // Avoids a SELECT + conditional INSERT on every increment() call.
+  // In-memory set of "group:period" pairs whose row creation committed.
+  // Avoids repeating INSERT OR IGNORE for every increment() call.
   // Cleared when the date rolls over so the new day's rows are created fresh.
   _ensuredPeriod = "";
   _ensuredKeys = /* @__PURE__ */ new Set();
@@ -2712,30 +2820,53 @@ var StatisticsRepository = class {
       this._ensuredPeriod = period;
     }
     const key = groupId === null ? "\0" : String(groupId);
-    if (this._ensuredKeys.has(key)) return;
+    if (this._ensuredKeys.has(key)) return null;
     const db = getDatabase();
-    const existing = groupId === null ? db.prepare("SELECT 1 FROM stat_snapshots WHERE group_id IS NULL AND period = ?").get(period) : db.prepare("SELECT 1 FROM stat_snapshots WHERE group_id = ? AND period = ?").get(groupId, period);
-    if (!existing) {
-      db.prepare(
-        `INSERT INTO stat_snapshots (group_id, period, created_at) VALUES (?, ?, ?)`
-      ).run(groupId, period, Date.now());
-    }
-    this._ensuredKeys.add(key);
+    db.prepare(
+      `INSERT OR IGNORE INTO stat_snapshots (group_id, period, created_at) VALUES (?, ?, ?)`
+    ).run(groupId, period, Date.now());
+    return key;
   }
-  /** Increments the per-group counter AND the global (group_id NULL) one —
-   *  the pairing every call site wants. */
-  bump(groupId, field) {
-    this.increment(groupId, field);
-    this.increment(null, field);
-  }
-  increment(groupId, field, amount = 1) {
-    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
-    const period = this.todayPeriod();
-    this.ensureSnapshot(groupId, period);
+  writeIncrement(groupId, period, field, amount, pendingKeys) {
+    const key = this.ensureSnapshot(groupId, period);
+    if (key) pendingKeys.push(key);
     getDatabase().prepare(
       `UPDATE stat_snapshots SET ${field} = ${field} + ?
          WHERE group_id ${groupId === null ? "IS NULL" : "= ?"} AND period = ?`
     ).run(...[amount, ...groupId !== null ? [groupId] : [], period]);
+  }
+  withWriteTransaction(operation) {
+    const db = getDatabase();
+    const pendingKeys = [];
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      operation(pendingKeys);
+      db.exec("COMMIT");
+      for (const key of pendingKeys) this._ensuredKeys.add(key);
+    } catch (error) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+      }
+      throw error;
+    }
+  }
+  /** Increments the per-group counter AND the global (group_id NULL) one —
+   *  the pairing every call site wants. */
+  bump(groupId, field) {
+    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
+    const period = this.todayPeriod();
+    this.withWriteTransaction((pendingKeys) => {
+      this.writeIncrement(groupId, period, field, 1, pendingKeys);
+      this.writeIncrement(null, period, field, 1, pendingKeys);
+    });
+  }
+  increment(groupId, field, amount = 1) {
+    if (!STAT_FIELDS.has(field)) throw new Error(`Invalid stat field: ${field}`);
+    const period = this.todayPeriod();
+    this.withWriteTransaction((pendingKeys) => {
+      this.writeIncrement(groupId, period, field, amount, pendingKeys);
+    });
   }
   findByPeriod(period, groupId) {
     if (groupId !== void 0) {
@@ -2986,9 +3117,9 @@ var PunishmentService = class {
     let reKicked = false;
     await withLock(locks.punishment(groupId, userId), async () => {
       const now = Date.now();
-      const active = punishmentRepo.findByUser(userId, groupId).filter((record2) => record2.revoked_at === null && (record2.expires_at === null || record2.expires_at > now));
+      const active = punishmentRepo.findByUser(userId, groupId).filter((record3) => record3.revoked_at === null && (record3.expires_at === null || record3.expires_at > now));
       if (active.length === 0) return;
-      const activeKick = active.find((record2) => record2.type === "kick");
+      const activeKick = active.find((record3) => record3.type === "kick");
       if (activeKick) {
         const actorId = canonicalActorId(cfg.core.selfId);
         await this._kickLocked(
@@ -3014,7 +3145,7 @@ var PunishmentService = class {
         await this._checkEscalationLocked(groupId, userId, actorId);
         return;
       }
-      const activeMute = active.find((record2) => record2.type === "mute");
+      const activeMute = active.find((record3) => record3.type === "mute");
       if (activeMute && activeMute.expires_at !== null) {
         const remainingSeconds = Math.max(1, Math.ceil((activeMute.expires_at - now) / 1e3));
         await callOneBot("set_group_ban", {
@@ -3041,17 +3172,17 @@ var PunishmentService = class {
   async mute(groupId, userId, durationSeconds, reason, operatorId2) {
     const actorId = canonicalActorId(operatorId2);
     return withLock(locks.punishment(groupId, userId), async () => {
-      const record2 = await this._muteLocked(groupId, userId, durationSeconds, reason, actorId);
+      const record3 = await this._muteLocked(groupId, userId, durationSeconds, reason, actorId);
       await this._checkEscalationLocked(groupId, userId, actorId);
-      return record2;
+      return record3;
     });
   }
   async kick(groupId, userId, reason, operatorId2, rejectFuture = false) {
     const actorId = canonicalActorId(operatorId2);
     return withLock(locks.punishment(groupId, userId), async () => {
-      const record2 = await this._kickLocked(groupId, userId, reason, actorId, rejectFuture);
+      const record3 = await this._kickLocked(groupId, userId, reason, actorId, rejectFuture);
       await this._checkEscalationLocked(groupId, userId, actorId);
-      return record2;
+      return record3;
     });
   }
   async unban(groupId, userId, operatorId2) {
@@ -3066,26 +3197,26 @@ var PunishmentService = class {
     const candidate = punishmentRepo.findById(punishmentId);
     if (!candidate) throw new Error(`Punishment ${punishmentId} not found`);
     await withLock(locks.punishment(candidate.group_id, candidate.user_id), async () => {
-      const record2 = punishmentRepo.findById(punishmentId);
-      if (!record2) throw new Error(`Punishment ${punishmentId} not found`);
-      if (record2.revoked_at !== null) return;
+      const record3 = punishmentRepo.findById(punishmentId);
+      if (!record3) throw new Error(`Punishment ${punishmentId} not found`);
+      if (record3.revoked_at !== null) return;
       const now = Date.now();
-      const shouldUnban = this._isActiveMute(record2, now) && !punishmentRepo.findByUser(record2.user_id, record2.group_id).some((other) => other.id !== record2.id && this._isActiveMute(other, now));
+      const shouldUnban = this._isActiveMute(record3, now) && !punishmentRepo.findByUser(record3.user_id, record3.group_id).some((other) => other.id !== record3.id && this._isActiveMute(other, now));
       if (shouldUnban) {
         await callOneBot("set_group_ban", {
-          group_id: String(record2.group_id),
-          user_id: String(record2.user_id),
+          group_id: String(record3.group_id),
+          user_id: String(record3.user_id),
           duration: 0
         });
       }
-      punishmentRepo.revoke(record2.id, actorId);
+      punishmentRepo.revoke(record3.id, actorId);
       if (shouldUnban) {
         bus.emit("AuditCreated", {
           action: "punishment.unban",
           actorId,
           targetType: "user",
-          targetId: String(record2.user_id),
-          details: { groupId: record2.group_id, via: "revoke" },
+          targetId: String(record3.user_id),
+          details: { groupId: record3.group_id, via: "revoke" },
           timestamp: now
         });
       }
@@ -3093,8 +3224,8 @@ var PunishmentService = class {
         action: "punishment.revoke",
         actorId,
         targetType: "punishment",
-        targetId: String(record2.id),
-        details: { groupId: record2.group_id, unbanned: shouldUnban },
+        targetId: String(record3.id),
+        details: { groupId: record3.group_id, unbanned: shouldUnban },
         timestamp: now
       });
     });
@@ -3105,7 +3236,7 @@ var PunishmentService = class {
       user_id: String(userId),
       duration: durationSeconds
     });
-    const record2 = punishmentRepo.create({ groupId, userId, type: "mute", durationSeconds, reason, operatorId: actorId });
+    const record3 = punishmentRepo.create({ groupId, userId, type: "mute", durationSeconds, reason, operatorId: actorId });
     statisticsRepo.bump(groupId, "punishments_total");
     bus.emit("AuditCreated", {
       action: "punishment.mute",
@@ -3115,7 +3246,7 @@ var PunishmentService = class {
       details: { groupId, durationSeconds, reason },
       timestamp: Date.now()
     });
-    return record2;
+    return record3;
   }
   async _kickLocked(groupId, userId, reason, actorId, rejectFuture) {
     await callOneBot("set_group_kick", {
@@ -3123,7 +3254,7 @@ var PunishmentService = class {
       user_id: String(userId),
       reject_add_request: rejectFuture
     });
-    const record2 = punishmentRepo.create({ groupId, userId, type: "kick", durationSeconds: null, reason, operatorId: actorId });
+    const record3 = punishmentRepo.create({ groupId, userId, type: "kick", durationSeconds: null, reason, operatorId: actorId });
     statisticsRepo.bump(groupId, "punishments_total");
     bus.emit("AuditCreated", {
       action: "punishment.kick",
@@ -3133,7 +3264,7 @@ var PunishmentService = class {
       details: { groupId, reason },
       timestamp: Date.now()
     });
-    return record2;
+    return record3;
   }
   async _unbanLocked(groupId, userId, actorId) {
     await callOneBot("set_group_ban", {
@@ -3150,8 +3281,8 @@ var PunishmentService = class {
       timestamp: Date.now()
     });
   }
-  _isActiveMute(record2, now) {
-    return record2.type === "mute" && record2.revoked_at === null && (record2.expires_at === null || record2.expires_at > now);
+  _isActiveMute(record3, now) {
+    return record3.type === "mute" && record3.revoked_at === null && (record3.expires_at === null || record3.expires_at > now);
   }
   /** Blacklist-threshold check alone (never kicks, never recurses, never
    *  throws). Returns true when the user was just auto-blacklisted. */
@@ -3232,7 +3363,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { closeSync, existsSync as existsSync2, openSync, renameSync as renameSync2, unlinkSync as unlinkSync2, writeSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
-import { isIP } from "node:net";
+import { isIP as isIP2 } from "node:net";
 import { Readable } from "node:stream";
 var DEFAULT_MAX_REDIRECTS = 5;
 var DEFAULT_USER_AGENT = "qq-guardian";
@@ -3251,14 +3382,14 @@ function isPrivateIpv6(address) {
   return normalized === "::" || normalized === "::1" || Number.isNaN(firstHextet) || firstHextet >= 65152 && firstHextet <= 65215 || firstHextet >= 64512 && firstHextet <= 65023 || firstHextet >= 65280;
 }
 function isPrivateNetworkAddress(address) {
-  const family = isIP(address.replace(/^\[|\]$/g, ""));
+  const family = isIP2(address.replace(/^\[|\]$/g, ""));
   if (family === 4) return isPrivateIpv4(address);
   if (family === 6) return isPrivateIpv6(address);
   return true;
 }
 async function resolveAll(hostname) {
   const records = await dnsLookup(hostname, { all: true, verbatim: true });
-  return records.map((record2) => record2.address);
+  return records.map((record3) => record3.address);
 }
 function normalizedHostname(hostname) {
   return hostname.toLowerCase().replace(/^\[|\]$/g, "");
@@ -3283,7 +3414,7 @@ async function validateRemoteTarget(rawUrl, policy, resolveHostname) {
   if (policy.allowedHosts && !policy.allowedHosts.has(hostname)) {
     throw new Error("Remote URL host is not allowed");
   }
-  if (isIP(hostname)) {
+  if (isIP2(hostname)) {
     assertResolvedAddresses([hostname], Boolean(policy.allowPrivateNetwork));
     return { url, hostname };
   }
@@ -3303,10 +3434,10 @@ function pinnedLookup(policy, resolveHostname) {
     void (async () => {
       try {
         const hostname = normalizedHostname(rawHostname);
-        const addresses = isIP(hostname) ? [hostname] : await resolveHostname(hostname);
+        const addresses = isIP2(hostname) ? [hostname] : await resolveHostname(hostname);
         assertResolvedAddresses(addresses, Boolean(policy.allowPrivateNetwork));
         const requestedFamily = typeof options === "number" ? options : options.family ?? 0;
-        const candidates = addresses.filter((candidate) => requestedFamily === 0 || isIP(candidate) === requestedFamily).map((address) => ({ address, family: isIP(address) }));
+        const candidates = addresses.filter((candidate) => requestedFamily === 0 || isIP2(candidate) === requestedFamily).map((address) => ({ address, family: isIP2(address) }));
         if (candidates.length === 0) throw new Error("Remote URL could not be resolved");
         if (typeof options !== "number" && options.all) {
           callback(null, candidates);
@@ -3378,7 +3509,7 @@ function requestRemote(target, init, policy, resolveHostname, signal) {
       lookup: pinnedLookup(policy, resolveHostname),
       signal
     };
-    const request = target.url.protocol === "https:" ? httpsRequest({ ...options, servername: isIP(target.hostname) ? void 0 : target.hostname }, onResponse) : httpRequest(options, onResponse);
+    const request = target.url.protocol === "https:" ? httpsRequest({ ...options, servername: isIP2(target.hostname) ? void 0 : target.hostname }, onResponse) : httpRequest(options, onResponse);
     request.once("error", (error) => finish(() => rejectResponse(error)));
     try {
       endRequest(request, init.body);
@@ -4091,6 +4222,10 @@ var ApprovalService = class {
     await withLock(locks.approval(initial.flag), async () => {
       const rec = approvalRepo.findById(id);
       if (!rec || rec.status !== "pending") throw new Error("Invalid approval record");
+      if (rec.expires_at <= Date.now()) {
+        approvalRepo.expirePendingIfExpired(rec.id);
+        throw new Error("Approval request has expired");
+      }
       try {
         await this._approve(rec.flag, operatorId2, "manual_operator");
       } catch (error) {
@@ -4107,6 +4242,10 @@ var ApprovalService = class {
     await withLock(locks.approval(initial.flag), async () => {
       const rec = approvalRepo.findById(id);
       if (!rec || rec.status !== "pending") throw new Error("Invalid approval record");
+      if (rec.expires_at <= Date.now()) {
+        approvalRepo.expirePendingIfExpired(rec.id);
+        throw new Error("Approval request has expired");
+      }
       try {
         await this._reject(rec.flag, reason, operatorId2);
       } catch (error) {
@@ -6723,17 +6862,19 @@ function consumeBootstrapAfterLogin(user) {
   if (user.role === "super_admin") removeFile(bootstrapPath(getRuntimeHost().paths.dataPath));
 }
 var GENERIC_AUTH_FAILURE = "Invalid credentials";
+var DUMMY_PASSWORD_HASH = "scrypt:v2:16384:8:1:71712d677561726469616e2d64756d6d:2c26785720ced4d8270ff3c0a690b01c5d26a887df38fb986c464fcc059c8c8a";
 async function login(usernameInput, password, ip, userAgent) {
   const username = normalizeUsername(usernameInput);
   const config = configManager.get().auth;
   const user = username ? userRepo.findByUsername(username) : null;
+  const passwordMatches = await verifyPassword(user?.password_hash ?? DUMMY_PASSWORD_HASH, password);
   if (!user?.password_hash) return { ok: false, error: GENERIC_AUTH_FAILURE };
   const now = Date.now();
   if (user.locked_until && now < user.locked_until) {
     auditRepo.logLogin({ userId: user.id, ip, userAgent, success: false });
     return { ok: false, error: GENERIC_AUTH_FAILURE };
   }
-  if (!await verifyPassword(user.password_hash, password)) {
+  if (!passwordMatches) {
     const outcome = userRepo.recordLoginFailure(user.id, config.maxLoginAttempts, now + config.lockoutSeconds * 1e3);
     auditRepo.logLogin({ userId: user.id, ip, userAgent, success: false });
     void outcome;
@@ -7083,9 +7224,9 @@ function createCrc32Table() {
 
 // src/modules/update/apply.ts
 var PLUGIN_PACKAGE_NAME = "napcat-plugin-qq-guardian";
-function applyNapCatUpdateArchive(archive, pluginPath, backupRoot, version7) {
+function applyNapCatUpdateArchive(archive, pluginPath, backupRoot, version8) {
   const files = parseNapCatUpdateArchive(archive);
-  validateReleaseManifests(files, version7);
+  validateReleaseManifests(files, version8);
   const pluginRoot = realpathSync(pluginPath);
   if (!lstatSync(pluginRoot).isDirectory()) throw new Error("NapCat plugin path is not a directory");
   const targets = NAPCAT_UPDATE_FILES.map((relativePath) => {
@@ -7107,7 +7248,7 @@ function applyNapCatUpdateArchive(archive, pluginPath, backupRoot, version7) {
   });
   mkdirSync3(backupRoot, { recursive: true, mode: 448 });
   const resolvedBackupRoot = realpathSync(backupRoot);
-  const backupPath = mkdtempSync(join4(resolvedBackupRoot, `update-${version7.replace(/[^A-Za-z0-9._+-]/g, "_")}-`));
+  const backupPath = mkdtempSync(join4(resolvedBackupRoot, `update-${version8.replace(/[^A-Za-z0-9._+-]/g, "_")}-`));
   chmodSync3(backupPath, 448);
   const previousFiles = [];
   try {
@@ -7119,7 +7260,7 @@ function applyNapCatUpdateArchive(archive, pluginPath, backupRoot, version7) {
       previousFiles.push({ path: target.relativePath, sha256: sha256(readFileSync3(destination)) });
     }
     writeFileSync3(join4(backupPath, "manifest.json"), `${JSON.stringify({
-      version: version7,
+      version: version8,
       createdAt: (/* @__PURE__ */ new Date()).toISOString(),
       files: previousFiles
     }, null, 2)}
@@ -7163,8 +7304,8 @@ function validateReleaseManifests(files, expectedVersion) {
     if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
       throw new Error(`Update archive has an invalid ${name}`);
     }
-    const record2 = manifest;
-    if (record2["name"] !== PLUGIN_PACKAGE_NAME || record2["version"] !== expectedVersion) {
+    const record3 = manifest;
+    if (record3["name"] !== PLUGIN_PACKAGE_NAME || record3["version"] !== expectedVersion) {
       throw new Error(`Update archive ${name} does not match the selected QQ Guardian release`);
     }
   }
@@ -7237,8 +7378,8 @@ function normalizeReleaseVersion(value) {
   return `${match[1]}.${match[2]}.${match[3]}${prerelease ? `-${prerelease}` : ""}${match[5] ? `+${match[5]}` : ""}`;
 }
 var currentVersion = "1.0.0";
-function setCurrentVersion(version7) {
-  currentVersion = version7;
+function setCurrentVersion(version8) {
+  currentVersion = version8;
 }
 function getCurrentVersion() {
   return currentVersion;
@@ -7283,8 +7424,8 @@ function releaseAssetUrl(value, repo, tag, assetName) {
     return null;
   }
 }
-function selectReleaseAssetPair(assets, runtimeKind, version7, repo, tag) {
-  const acceptedArchiveNames = runtimeKind === "napcat" ? [`napcat-plugin-qq-guardian-v${version7}.zip`, "napcat-plugin-qq-guardian.zip"] : runtimeKind === "snowluma" ? [`qq-guardian-snowluma-v${version7}.zip`, "qq-guardian-snowluma.zip"] : [];
+function selectReleaseAssetPair(assets, runtimeKind, version8, repo, tag) {
+  const acceptedArchiveNames = runtimeKind === "napcat" ? [`napcat-plugin-qq-guardian-v${version8}.zip`, "napcat-plugin-qq-guardian.zip"] : runtimeKind === "snowluma" ? [`qq-guardian-snowluma-v${version8}.zip`, "qq-guardian-snowluma.zip"] : [];
   for (const archiveName of acceptedArchiveNames) {
     const archiveMatches = assets.filter((asset) => asset["name"] === archiveName);
     if (archiveMatches.length === 0) continue;
@@ -7301,14 +7442,14 @@ function selectReleaseAssetPair(assets, runtimeKind, version7, repo, tag) {
 function normalizeGitHubRelease(release, repo, runtimeKind = "napcat") {
   if (!isRecord(release)) return null;
   const tag = typeof release["tag_name"] === "string" ? release["tag_name"] : "";
-  const version7 = normalizeReleaseVersion(tag);
-  if (!version7) return null;
+  const version8 = normalizeReleaseVersion(tag);
+  if (!version8) return null;
   const assets = Array.isArray(release["assets"]) ? release["assets"].filter(isRecord) : [];
-  const { downloadUrl, checksumUrl } = selectReleaseAssetPair(assets, runtimeKind, version7, repo, tag);
+  const { downloadUrl, checksumUrl } = selectReleaseAssetPair(assets, runtimeKind, version8, repo, tag);
   const rawPublishedAt = release["published_at"];
   const published = typeof rawPublishedAt === "string" && rawPublishedAt.length <= 128 ? Date.parse(rawPublishedAt) : Number.NaN;
   return {
-    version: version7,
+    version: version8,
     tag,
     prerelease: release["prerelease"] === true,
     publishedAt: Number.isFinite(published) ? new Date(published).toISOString() : "",
@@ -7373,6 +7514,17 @@ async function sha256File(path) {
   for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest("hex");
 }
+function matchesGitHubRepositoryUri(candidate, repository) {
+  const [owner, name, extra] = repository.split("/");
+  if (!owner || !name || extra !== void 0) return false;
+  try {
+    const url = new URL(candidate);
+    const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    return url.origin.toLowerCase() === "https://github.com" && !url.username && !url.password && !url.port && !url.search && !url.hash && segments.length === 2 && segments[0].toLowerCase() === owner.toLowerCase() && segments[1].toLowerCase() === name.toLowerCase();
+  } catch {
+    return false;
+  }
+}
 async function verifyGitHubAttestation(repo, artifactDigest) {
   const apiPath = `/repos/${repo}/attestations/sha256:${artifactDigest}`;
   let response;
@@ -7387,8 +7539,6 @@ async function verifyGitHubAttestation(repo, artifactDigest) {
   const attestations = response["attestations"];
   if (!Array.isArray(attestations)) throw new Error("Attestation API response.attestations is not an array");
   if (attestations.length === 0) return "none";
-  const [owner, name] = repo.split("/");
-  const expectedRepoUri = `https://github.com/${owner}/${name}`;
   for (const entry of attestations) {
     if (!entry || typeof entry !== "object") continue;
     const bundle = entry["bundle"];
@@ -7413,7 +7563,7 @@ async function verifyGitHubAttestation(repo, artifactDigest) {
         const workflow = extParams["workflow"];
         if (workflow && typeof workflow === "object") {
           const repoUri = workflow["repository"];
-          if (typeof repoUri === "string" && repoUri.startsWith(expectedRepoUri)) {
+          if (typeof repoUri === "string" && matchesGitHubRepositoryUri(repoUri, repo)) {
             return "verified";
           }
         }
@@ -7514,8 +7664,8 @@ async function downloadUpdate(info, actorId = null) {
     return verifiedDigest;
   });
 }
-async function installUpdate(version7, actorId = null) {
-  const normalizedVersion = normalizeReleaseVersion(version7);
+async function installUpdate(version8, actorId = null) {
+  const normalizedVersion = normalizeReleaseVersion(version8);
   if (!normalizedVersion) throw new Error("Update version must be a valid semantic version");
   const host = getRuntimeHost();
   if (host.kind !== "napcat") throw new Error("In-app installation is supported only for the NapCat plugin; use the standalone updater for SnowLuma");
@@ -7556,14 +7706,85 @@ async function installUpdate(version7, actorId = null) {
 }
 function isNewerVersion(latest, current) {
   const parse = (value) => {
-    const parts = value.split(".").map((part) => Math.max(0, Number.parseInt(part, 10) || 0));
-    return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
+    const normalized = normalizeReleaseVersion(value);
+    if (!normalized) return null;
+    const withoutBuild = normalized.split("+", 1)[0];
+    const prereleaseIndex = withoutBuild.indexOf("-");
+    const coreText = prereleaseIndex < 0 ? withoutBuild : withoutBuild.slice(0, prereleaseIndex);
+    const prerelease = prereleaseIndex < 0 ? null : withoutBuild.slice(prereleaseIndex + 1).split(".");
+    const core = coreText.split(".").map(Number);
+    return core.length === 3 ? { core: [core[0], core[1], core[2]], prerelease } : null;
   };
-  const [latestMajor, latestMinor, latestPatch] = parse(latest);
-  const [currentMajor, currentMinor, currentPatch] = parse(current);
-  if (latestMajor !== currentMajor) return latestMajor > currentMajor;
-  if (latestMinor !== currentMinor) return latestMinor > currentMinor;
-  return latestPatch > currentPatch;
+  const latestVersion = parse(latest);
+  const currentVersion2 = parse(current);
+  if (!latestVersion || !currentVersion2) return false;
+  for (let index = 0; index < 3; index += 1) {
+    if (latestVersion.core[index] !== currentVersion2.core[index]) {
+      return latestVersion.core[index] > currentVersion2.core[index];
+    }
+  }
+  if (!latestVersion.prerelease) return Boolean(currentVersion2.prerelease);
+  if (!currentVersion2.prerelease) return false;
+  const latestIds = latestVersion.prerelease;
+  const currentIds = currentVersion2.prerelease;
+  const length = Math.min(latestIds.length, currentIds.length);
+  for (let index = 0; index < length; index += 1) {
+    const latestId = latestIds[index];
+    const currentId = currentIds[index];
+    if (latestId === currentId) continue;
+    const latestNumeric = /^\d+$/.test(latestId);
+    const currentNumeric = /^\d+$/.test(currentId);
+    if (latestNumeric && currentNumeric) {
+      if (latestId.length !== currentId.length) return latestId.length > currentId.length;
+      return latestId > currentId;
+    }
+    if (latestNumeric !== currentNumeric) return !latestNumeric;
+    return latestId > currentId;
+  }
+  return latestIds.length > currentIds.length;
+}
+
+// src/api/client-ip.ts
+var FALLBACK_CLIENT_IP = "127.0.0.1";
+function record2(value) {
+  return value !== null && typeof value === "object" ? value : null;
+}
+function socketAddress(value) {
+  const request = record2(value);
+  if (!request) return null;
+  for (const candidate of [request["socket"], request["connection"]]) {
+    const address = record2(candidate)?.["remoteAddress"];
+    if (typeof address === "string" && ipFamilyOf(address)) return address;
+  }
+  return null;
+}
+function actualPeerAddress(raw) {
+  const direct = socketAddress(raw);
+  if (direct) return direct;
+  return socketAddress(record2(raw)?.["raw"]);
+}
+function headerValue(req, name) {
+  const entry = Object.entries(req.headers).find(([header]) => header.toLowerCase() === name.toLowerCase());
+  const value = entry?.[1];
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(",");
+  return null;
+}
+function resolveClientIp(req, trustedProxyCidrs) {
+  const peer = actualPeerAddress(req.raw);
+  if (!peer || !trustedProxyCidrs.some((cidr) => ipMatchesCidr(peer, cidr))) {
+    return FALLBACK_CLIENT_IP;
+  }
+  const forwarded = headerValue(req, "x-forwarded-for");
+  if (!forwarded) return FALLBACK_CLIENT_IP;
+  const hops = forwarded.split(",").map((part) => part.trim());
+  if (hops.length === 0 || hops.some((hop) => !ipFamilyOf(hop))) return FALLBACK_CLIENT_IP;
+  for (let index = hops.length - 1; index >= 0; index -= 1) {
+    const hop = hops[index];
+    if (trustedProxyCidrs.some((cidr) => ipMatchesCidr(hop, cidr))) continue;
+    return hop;
+  }
+  return FALLBACK_CLIENT_IP;
 }
 
 // src/api/index.ts
@@ -7663,58 +7884,8 @@ function pagination(req) {
     offset: intParam(req.query["offset"], 0, Number.MAX_SAFE_INTEGER)
   };
 }
-function ipMatchesCidr(ip, cidr) {
-  try {
-    const [network, prefix] = cidr.includes("/") ? cidr.split("/") : [cidr, void 0];
-    const prefixLen = prefix !== void 0 ? parseInt(prefix, 10) : void 0;
-    if (prefixLen === void 0) return ip.trim() === network.trim();
-    if (!network.includes(":")) {
-      const ipParts = ip.split(".").map(Number);
-      const netParts = (network ?? "").split(".").map(Number);
-      if (ipParts.length !== 4 || netParts.length !== 4) return false;
-      if (ipParts.some(Number.isNaN) || netParts.some(Number.isNaN)) return false;
-      const ipNum = ipParts[0] << 24 | ipParts[1] << 16 | ipParts[2] << 8 | ipParts[3];
-      const netNum = netParts[0] << 24 | netParts[1] << 16 | netParts[2] << 8 | netParts[3];
-      const mask = prefixLen === 0 ? 0 : ~0 << 32 - prefixLen >>> 0;
-      return (ipNum >>> 0 & mask) === (netNum >>> 0 & mask);
-    }
-    return ip.trim().toLowerCase() === (network ?? "").trim().toLowerCase();
-  } catch {
-    return false;
-  }
-}
-function isFromTrustedProxy(req) {
-  const cidrs = configManager.get().auth.trustedProxyCidrs;
-  if (!cidrs.length) return false;
-  const fwd = req.headers["x-forwarded-for"] ?? req.headers["X-Forwarded-For"];
-  if (fwd) {
-    const header = Array.isArray(fwd) ? fwd.join(",") : fwd;
-    const parts = header.split(",").map((s) => s.trim()).filter(Boolean);
-    const peer = parts[parts.length - 1];
-    if (peer && cidrs.some((c) => ipMatchesCidr(peer, c))) return true;
-  }
-  const realIp = req.headers["x-real-ip"] ?? req.headers["X-Real-IP"];
-  if (realIp) {
-    const peer = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
-    if (peer && cidrs.some((c) => ipMatchesCidr(peer, c))) return true;
-  }
-  return false;
-}
 function getClientIp(req) {
-  if (isFromTrustedProxy(req)) {
-    const realIp = req.headers["x-real-ip"] ?? req.headers["X-Real-IP"];
-    if (realIp) {
-      const ip = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
-      if (ip) return ip;
-    }
-    const fwd = req.headers["x-forwarded-for"] ?? req.headers["X-Forwarded-For"];
-    if (fwd) {
-      const header = Array.isArray(fwd) ? fwd.join(",") : fwd;
-      const ip = header.split(",").map((s) => s.trim()).filter(Boolean)[0];
-      if (ip) return ip;
-    }
-  }
-  return "127.0.0.1";
+  return resolveClientIp(req, configManager.get().auth.trustedProxyCidrs);
 }
 function checkIpRateLimit(ip) {
   const cfg = configManager.get().auth;
@@ -7856,7 +8027,7 @@ function registerRoutes() {
     );
     if (!result.ok) return bad(res, 401, result.error ?? "Login failed");
     res.setHeader("Set-Cookie", buildRefreshCookie(result.refreshToken, REFRESH_TOKEN_TTL_SEC, req));
-    ok(res, { accessToken: result.accessToken, refreshToken: result.refreshToken });
+    ok(res, { accessToken: result.accessToken });
   }));
   r.postNoAuth("/auth/refresh", wrap(async (req, res) => {
     const oldRefreshToken = extractRefreshToken(req);
@@ -7866,7 +8037,7 @@ function registerRoutes() {
       return bad(res, 401, "Invalid, expired, or revoked refresh token");
     }
     res.setHeader("Set-Cookie", buildRefreshCookie(tokens.refreshToken, REFRESH_TOKEN_TTL_SEC, req));
-    ok(res, tokens);
+    ok(res, { accessToken: tokens.accessToken });
   }));
   r.postNoAuth("/auth/logout", wrap(async (req, res) => {
     const token = extractBearer(req);
@@ -8185,33 +8356,24 @@ function registerRoutes() {
       return bad(res, 400, "Update download body must be an object");
     }
     const body = req.body;
-    const version7 = body["version"];
-    const downloadUrl = body["downloadUrl"];
-    const checksumUrl = body["checksumUrl"];
-    const normalizedVersion = normalizeReleaseVersion(version7);
-    if (!normalizedVersion || typeof downloadUrl !== "string" || downloadUrl.length > 2048 || typeof checksumUrl !== "string" || checksumUrl.length > 2048) {
-      return bad(res, 400, "version must be SemVer; downloadUrl and checksumUrl are required strings");
-    }
-    await downloadUpdate({
-      version: normalizedVersion,
-      downloadUrl,
-      checksumUrl,
-      publishedAt: "",
-      releaseUrl: "",
-      releaseNotes: ""
-    }, authenticatedOperators.get(req) ?? null);
+    const version8 = body["version"];
+    const normalizedVersion = normalizeReleaseVersion(version8);
+    if (!normalizedVersion) return bad(res, 400, "version must be SemVer");
+    const release = (await fetchReleases()).find((candidate) => candidate.version === normalizedVersion && candidate.downloadUrl !== null && candidate.checksumUrl !== null);
+    if (!release) return bad(res, 404, "No verified automatic download is available for this version");
+    await downloadUpdate(release, authenticatedOperators.get(req) ?? null);
     ok(res);
   }));
   r.postNoAuth("/update/install", requireAuth("super_admin", async (req, res) => {
     if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
       return bad(res, 400, "Update install body must be an object");
     }
-    const version7 = normalizeReleaseVersion(req.body["version"]);
-    if (!version7) return bad(res, 400, "version must be a valid semantic version");
+    const version8 = normalizeReleaseVersion(req.body["version"]);
+    if (!version8) return bad(res, 400, "version must be a valid semantic version");
     if (getRuntimeHost().kind !== "napcat") {
       return bad(res, 409, "In-app installation is supported only for the NapCat plugin");
     }
-    ok(res, await installUpdate(version7, authenticatedOperators.get(req) ?? null));
+    ok(res, await installUpdate(version8, authenticatedOperators.get(req) ?? null));
   }));
   function sanitizeUser(user) {
     const { password_hash: _, ...sanitized } = user;
@@ -8843,11 +9005,11 @@ function ensureFileOrAbsent(path, label) {
   return true;
 }
 function parseJournal(value, layout) {
-  const record2 = asRecord2(value, "migration journal");
-  if (record2.format !== SHADOW_MIGRATION_FORMAT || typeof record2.id !== "string") {
+  const record3 = asRecord2(value, "migration journal");
+  if (record3.format !== SHADOW_MIGRATION_FORMAT || typeof record3.id !== "string") {
     throw new ShadowMigrationError("migration journal has an unsupported format");
   }
-  const journal = record2;
+  const journal = record3;
   const pathRecord = asRecord2(journal.paths, "migration journal paths");
   if (resolve2(String(pathRecord.configPath)) !== layout.configPath || resolve2(String(pathRecord.databasePath)) !== layout.databasePath || resolve2(String(pathRecord.credentialsPath)) !== layout.credentialsPath) {
     throw new ShadowMigrationError("migration journal does not match the configured persistent paths");
@@ -8878,8 +9040,8 @@ function loadJournal(layout) {
   return parseJournal(readJson(layout.journalPath), layout);
 }
 function artifactMetadataMatches(value, expected, label) {
-  const record2 = asRecord2(value, label);
-  return typeof record2.path === "string" && resolve2(record2.path) === resolve2(expected.path) && record2.sha256 === expected.sha256 && record2.bytes === expected.bytes;
+  const record3 = asRecord2(value, label);
+  return typeof record3.path === "string" && resolve2(record3.path) === resolve2(expected.path) && record3.sha256 === expected.sha256 && record3.bytes === expected.bytes;
 }
 function optionalArtifactMetadataMatches(value, expected, label) {
   if (expected === null) return value === null;
@@ -9017,26 +9179,26 @@ async function recoverIncompleteJournal(layout) {
 }
 async function configIsCanonical(layout) {
   const raw = readJson(layout.configPath);
-  const record2 = asRecord2(raw, "config file");
-  const version7 = record2.schemaVersion;
-  if (version7 === CONFIG_SCHEMA_VERSION) {
+  const record3 = asRecord2(raw, "config file");
+  const version8 = record3.schemaVersion;
+  if (version8 === CONFIG_SCHEMA_VERSION) {
     const config = validateCanonicalConfigFile(raw);
     await validatePersistedApprovalPatterns(config.config);
     return true;
   }
-  if (typeof version7 === "number" && version7 > CONFIG_SCHEMA_VERSION) {
-    throw new ShadowMigrationError(`config schema ${version7} is newer than this Guardian runtime`);
+  if (typeof version8 === "number" && version8 > CONFIG_SCHEMA_VERSION) {
+    throw new ShadowMigrationError(`config schema ${version8} is newer than this Guardian runtime`);
   }
   return false;
 }
 async function databaseIsCanonical(layout) {
   const db = openDatabaseFile(layout.databasePath, true);
   try {
-    const version7 = getDatabaseSchemaVersion(db);
-    if (version7 > DATABASE_SCHEMA_VERSION) {
-      throw new ShadowMigrationError(`database schema ${version7} is newer than this Guardian runtime`);
+    const version8 = getDatabaseSchemaVersion(db);
+    if (version8 > DATABASE_SCHEMA_VERSION) {
+      throw new ShadowMigrationError(`database schema ${version8} is newer than this Guardian runtime`);
     }
-    if (version7 !== DATABASE_SCHEMA_VERSION) return false;
+    if (version8 !== DATABASE_SCHEMA_VERSION) return false;
     await validateDatabase(db);
     return true;
   } finally {
@@ -9402,8 +9564,8 @@ async function boot(host) {
       await bootstrapGroups();
       ensureBootIsCurrent(bootGeneration);
       initApprovalSync();
-      const version7 = readPackageVersion(pluginPath);
-      setCurrentVersion(version7);
+      const version8 = readPackageVersion(pluginPath);
+      setCurrentVersion(version8);
       if (config.update.autoCheckOnStartup) {
         void checkForUpdate().then((info) => {
           if (info) log.info({ version: info.version }, "Update available");
@@ -9411,7 +9573,7 @@ async function boot(host) {
       }
       ensureBootIsCurrent(bootGeneration);
       state = "running";
-      log.info({ version: version7 }, "Plugin boot complete");
+      log.info({ version: version8 }, "Plugin boot complete");
     } catch (error) {
       log.error(error, "Boot failed; cleaning up partial initialization");
       await cleanup();

@@ -40,6 +40,20 @@ for (const [name, command] of Object.entries({
 })) {
   if (!String(pkg.scripts?.[name] ?? '').includes(command)) errors.push(`package.json: invalid ${name} script`);
 }
+const webuiWorkflow = readFileSync(join(root, '.github/workflows/test.yml'), 'utf8');
+const playwrightConfig = readFileSync(join(root, 'playwright.config.ts'), 'utf8');
+if (pkg.scripts?.['test:webui'] !== 'playwright test --config=playwright.config.ts') {
+  errors.push('package.json: test:webui must use the reviewed Playwright config');
+}
+if (!playwrightConfig.includes('scripts/webui-smoke-server.mjs') || !playwrightConfig.includes('webServer:')) {
+  errors.push('playwright.config.ts: WebUI smoke must start its deterministic local fixture');
+}
+if (!webuiWorkflow.includes('pnpm exec playwright install --with-deps chromium')) {
+  errors.push('.github/workflows/test.yml: CI must install the Chromium browser dependencies');
+}
+if (!webuiWorkflow.includes('pnpm run test:webui')) {
+  errors.push('.github/workflows/test.yml: CI must run the Playwright WebUI smoke tests');
+}
 if (errors.length) {
   for (const error of errors) console.error(`✗ ${error}`);
   process.exit(1);

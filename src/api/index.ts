@@ -53,6 +53,7 @@ import { validateRegexPattern } from '../core/regex/index.ts';
 import { getLogger } from '../core/logger/index.ts';
 import type { ProviderTelemetrySnapshot } from '../runtime/provider-telemetry.ts';
 import { normalizeOneBotId } from '../types/onebot.ts';
+import { resolveClientIp } from './client-ip.ts';
 
 type H = (req: PluginHttpRequest, res: PluginHttpResponse) => void | Promise<void>;
 
@@ -186,104 +187,9 @@ function pagination(req: PluginHttpRequest): { limit: number; offset: number } {
 
 /** Login throttling is durable in SQLite; restarts cannot reset an active window. */
 
-/**
- * Minimal CIDR membership test for IPv4 and IPv6.
- * Supports both bare addresses ("10.0.0.1") and CIDR notation ("10.0.0.0/8").
- * Only called during a login attempt so performance is not critical.
- */
-function ipMatchesCidr(ip: string, cidr: string): boolean {
-  try {
-    const [network, prefix] = cidr.includes('/') ? cidr.split('/') : [cidr, undefined];
-    const prefixLen = prefix !== undefined ? parseInt(prefix, 10) : undefined;
-
-    // Simple string equality for bare addresses (also handles the /32 / /128 case implicitly)
-    if (prefixLen === undefined) return ip.trim() === network.trim();
-
-    // IPv4 CIDR
-    if (!network.includes(':')) {
-      const ipParts = ip.split('.').map(Number);
-      const netParts = (network ?? '').split('.').map(Number);
-      if (ipParts.length !== 4 || netParts.length !== 4) return false;
-      if (ipParts.some(Number.isNaN) || netParts.some(Number.isNaN)) return false;
-      const ipNum = (ipParts[0]! << 24) | (ipParts[1]! << 16) | (ipParts[2]! << 8) | ipParts[3]!;
-      const netNum = (netParts[0]! << 24) | (netParts[1]! << 16) | (netParts[2]! << 8) | netParts[3]!;
-      const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
-      return (ipNum >>> 0 & mask) === (netNum >>> 0 & mask);
-    }
-
-    // IPv6: bare equality only (full CIDR expansion omitted for simplicity;
-    // most real-world proxy deployments use loopback or /128 single addresses).
-    return ip.trim().toLowerCase() === (network ?? '').trim().toLowerCase();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Returns true if the client's representative IP is matched by any entry in
- * `trustedProxyCidrs`.  When the list is empty (the safe default) this always
- * returns false, meaning forwarding headers are never trusted.
- *
- * NapCat's PluginHttpRequest does not expose the raw peer address, so we rely
- * on the operator's trustedProxyCidrs declaration to decide trustworthiness.
- * The peer-address value used here is the rightmost entry of X-Forwarded-For
- * (appended by the closest proxy), which is the most reliable indicator of the
- * immediate sender when a proxy chain is present.
- */
-function isFromTrustedProxy(req: PluginHttpRequest): boolean {
-  const cidrs = configManager.get().auth.trustedProxyCidrs;
-  if (!cidrs.length) return false;
-
-  // Use the rightmost XFF entry as the immediate peer: a well-behaved proxy
-  // appends the IP of the connection it received.
-  const fwd = req.headers['x-forwarded-for'] ?? req.headers['X-Forwarded-For'];
-  if (fwd) {
-    const header = Array.isArray(fwd) ? fwd.join(',') : fwd;
-    const parts = header.split(',').map((s) => s.trim()).filter(Boolean);
-    const peer = parts[parts.length - 1];
-    if (peer && cidrs.some((c) => ipMatchesCidr(peer, c))) return true;
-  }
-  // Also accept a lone X-Real-IP from a known proxy.
-  const realIp = req.headers['x-real-ip'] ?? req.headers['X-Real-IP'];
-  if (realIp) {
-    const peer = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
-    if (peer && cidrs.some((c) => ipMatchesCidr(peer, c))) return true;
-  }
-  return false;
-}
-
-/**
- * Extract a representative client IP from the request.
- *
- * Forwarding headers (X-Real-IP, X-Forwarded-For) are honoured ONLY when the
- * request arrives from a configured trusted proxy — otherwise an untrusted
- * client could spoof any IP and escape per-IP rate limiting.
- *
- * When no trusted proxies are configured (the safe default), all requests share
- * the loopback fallback bucket because NapCat's PluginHttpRequest does not
- * expose the raw peer address.  Operators behind a reverse proxy must add the
- * proxy's address to auth.trustedProxyCidrs to enable per-IP throttling.
- */
+/** Resolve the rate-limit key using the socket peer and configured proxy trust. */
 function getClientIp(req: PluginHttpRequest): string {
-  if (isFromTrustedProxy(req)) {
-    // X-Real-IP: a single canonical IP set by nginx/traefik — prefer it.
-    const realIp = req.headers['x-real-ip'] ?? req.headers['X-Real-IP'];
-    if (realIp) {
-      const ip = (Array.isArray(realIp) ? realIp[0] : realIp)?.trim();
-      if (ip) return ip;
-    }
-    // X-Forwarded-For: leftmost is the original client (client-supplied entries
-    // are harmless here because we only reach this branch from a trusted proxy).
-    const fwd = req.headers['x-forwarded-for'] ?? req.headers['X-Forwarded-For'];
-    if (fwd) {
-      const header = Array.isArray(fwd) ? fwd.join(',') : fwd;
-      const ip = header.split(',').map((s) => s.trim()).filter(Boolean)[0];
-      if (ip) return ip;
-    }
-  }
-  // No trusted proxy configured, or the immediate sender is not a trusted proxy:
-  // all connections share this fallback bucket.
-  return '127.0.0.1';
+  return resolveClientIp(req, configManager.get().auth.trustedProxyCidrs);
 }
 
 function checkIpRateLimit(ip: string): boolean {
@@ -463,7 +369,7 @@ export function registerRoutes(): void {
     // QG-005: Set the refresh token in an HttpOnly cookie (not JS-readable).
     // The access token is returned in the body and kept in-memory by the client.
     res.setHeader('Set-Cookie', buildRefreshCookie(result.refreshToken!, REFRESH_TOKEN_TTL_SEC, req));
-    ok(res, { accessToken: result.accessToken, refreshToken: result.refreshToken });
+    ok(res, { accessToken: result.accessToken });
   }));
 
   r.postNoAuth('/auth/refresh', wrap(async (req, res) => {
@@ -474,7 +380,7 @@ export function registerRoutes(): void {
       return bad(res, 401, 'Invalid, expired, or revoked refresh token');
     }
     res.setHeader('Set-Cookie', buildRefreshCookie(tokens.refreshToken!, REFRESH_TOKEN_TTL_SEC, req));
-    ok(res, tokens);
+    ok(res, { accessToken: tokens.accessToken });
   }));
 
   r.postNoAuth('/auth/logout', wrap(async (req, res) => {
@@ -865,24 +771,17 @@ export function registerRoutes(): void {
     }
     const body = req.body as Record<string, unknown>;
     const version = body['version'];
-    const downloadUrl = body['downloadUrl'];
-    const checksumUrl = body['checksumUrl'];
     const normalizedVersion = normalizeReleaseVersion(version);
-    if (
-      !normalizedVersion
-      || typeof downloadUrl !== 'string' || downloadUrl.length > 2048
-      || typeof checksumUrl !== 'string' || checksumUrl.length > 2048
-    ) {
-      return bad(res, 400, 'version must be SemVer; downloadUrl and checksumUrl are required strings');
-    }
-    await downloadUpdate({
-      version: normalizedVersion,
-      downloadUrl,
-      checksumUrl,
-      publishedAt: '',
-      releaseUrl: '',
-      releaseNotes: '',
-    }, authenticatedOperators.get(req) ?? null);
+    if (!normalizedVersion) return bad(res, 400, 'version must be SemVer');
+    // Never trust the browser's asset/checksum URLs. Re-resolve the requested
+    // version against the configured GitHub repository and its exact, validated
+    // asset pair before downloading anything.
+    const release = (await fetchReleases()).find((candidate) =>
+      candidate.version === normalizedVersion
+      && candidate.downloadUrl !== null
+      && candidate.checksumUrl !== null);
+    if (!release) return bad(res, 404, 'No verified automatic download is available for this version');
+    await downloadUpdate(release, authenticatedOperators.get(req) ?? null);
     ok(res);
   }));
 

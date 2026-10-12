@@ -5,6 +5,7 @@ import * as m003 from './003_risk_rule_action.ts';
 import * as m004 from './004_canonical_storage.ts';
 import * as m005 from './005_onebot_identifiers.ts';
 import * as m006 from './006_login_rate_limits.ts';
+import * as m007 from './007_statistics_snapshot_uniqueness.ts';
 import { getLogger } from '../../core/logger/index.ts';
 
 interface Migration {
@@ -13,8 +14,8 @@ interface Migration {
   up: (db: DatabaseSync) => void;
 }
 
-export const DATABASE_SCHEMA_VERSION = 6;
-const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006];
+export const DATABASE_SCHEMA_VERSION = 7;
+const MIGRATIONS: Migration[] = [m001, m002, m003, m004, m005, m006, m007];
 
 export function runMigrations(db: DatabaseSync): void {
   const log = getLogger().child({ module: 'migrations' });

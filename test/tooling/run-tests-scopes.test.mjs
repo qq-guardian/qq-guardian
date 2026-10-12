@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -34,8 +35,13 @@ test('all scope is exactly the union of the Node test scopes', () => {
   assert.equal(new Set(all).size, all.length);
 });
 
-test('all scope never includes Playwright WebUI specs', () => {
+test('WebUI smoke uses a separate Playwright command that is installed and run in CI', () => {
   const all = listScope('all');
-
   assert.ok(all.every((file) => !file.startsWith('test/webui/')));
+
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(manifest.scripts['test:webui'], 'playwright test --config=playwright.config.ts');
+  const workflow = readFileSync(join(ROOT, '.github/workflows/test.yml'), 'utf8');
+  assert.match(workflow, /pnpm exec playwright install --with-deps chromium/);
+  assert.match(workflow, /pnpm run test:webui/);
 });

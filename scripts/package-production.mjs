@@ -120,8 +120,8 @@ function detectPlatform() {
 function linuxUpdater() {
   return String.raw`#!/bin/sh
 set -eu
-PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
-ARCHIVE="\${1:-}"
+PREFIX="${'$'}{QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
+ARCHIVE="${'$'}{1:-}"
 [ -n "$ARCHIVE" ] || { echo "Usage: ./update.sh /path/to/qq-guardian-vX.Y.Z-linux-x64.tar.gz" >&2; exit 2; }
 [ -f "$ARCHIVE" ] || { echo "Archive not found: $ARCHIVE" >&2; exit 1; }
 command -v tar >/dev/null 2>&1 || { echo "tar is required" >&2; exit 1; }
@@ -130,8 +130,9 @@ trap 'rm -rf "$TMP"' EXIT
 tar -xzf "$ARCHIVE" -C "$TMP"
 NEW="$(find "$TMP" -maxdepth 1 -type d -name 'qq-guardian-v*' | head -n1)"
 [ -n "$NEW" ] || { echo "Invalid update archive" >&2; exit 1; }
-MANIFEST_VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$NEW/RELEASE-MANIFEST.json" | head -n1)"
-[ -n "$MANIFEST_VERSION" ] || { echo "Missing release version" >&2; exit 1; }
+MANIFEST_VERSION="$(grep -Eo '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$NEW/RELEASE-MANIFEST.json" | head -n1 | cut -d '"' -f 4)"
+[ -n "$MANIFEST_VERSION" ] && [ "${'$'}{#MANIFEST_VERSION}" -le 128 ] || { echo "Missing or invalid release version" >&2; exit 1; }
+printf '%s\n' "$MANIFEST_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' || { echo "Invalid release version" >&2; exit 1; }
 VERSION="v$MANIFEST_VERSION"
 TARGET="$PREFIX/releases/$VERSION"
 mkdir -p "$PREFIX/releases" "$PREFIX/data" "$PREFIX/config" "$PREFIX/logs"
@@ -149,13 +150,14 @@ echo "Updated qq-guardian to $VERSION at $PREFIX/current"
 function linuxInstaller() {
   return String.raw`#!/bin/sh
 set -eu
-PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
+PREFIX="${'$'}{PREFIX:-$HOME/.local/opt/qq-guardian}"
 YES=0
-[ "\${1:-}" = "--yes" ] && YES=1
-[ "\${QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
+[ "${'$'}{1:-}" = "--yes" ] && YES=1
+[ "${'$'}{QQ_GUARDIAN_NON_INTERACTIVE:-0}" = "1" ] && YES=1
 BASE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-VERSION="$(sed -n 's/.*"version": "([^"]*)".*/\\1/p' "$BASE/RELEASE-MANIFEST.json" | head -n1)"
-[ -n "$VERSION" ] || { echo "Missing release version" >&2; exit 1; }
+VERSION="$(grep -Eo '"version"[[:space:]]*:[[:space:]]*"[^"]+"' "$BASE/RELEASE-MANIFEST.json" | head -n1 | cut -d '"' -f 4)"
+[ -n "$VERSION" ] && [ "${'$'}{#VERSION}" -le 128 ] || { echo "Missing or invalid release version" >&2; exit 1; }
+printf '%s\n' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' || { echo "Invalid release version" >&2; exit 1; }
 VERSION="v$VERSION"
 if [ "$YES" -ne 1 ] && [ -t 0 ]; then
   printf 'Install qq-guardian %s at %s? [y/N] ' "$VERSION" "$PREFIX"
@@ -182,7 +184,7 @@ echo "Run: $PREFIX/current/launcher.sh"
 function linuxVerify() {
   return String.raw`#!/bin/sh
 set -eu
-ROOT="\${1:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
+ROOT="${'$'}{1:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 for f in launcher.sh app/index.mjs runtime/node/bin/node RELEASE-MANIFEST.json; do [ -e "$ROOT/$f" ] || { echo "Missing $f" >&2; exit 1; }; done
 "$ROOT/runtime/node/bin/node" "$ROOT/app/index.mjs" --version >/dev/null 2>&1 || true
 echo "qq-guardian package layout verified: $ROOT"
@@ -191,8 +193,8 @@ echo "qq-guardian package layout verified: $ROOT"
 function linuxUninstall() {
   return String.raw`#!/bin/sh
 set -eu
-PREFIX="\${PREFIX:-$HOME/.local/opt/qq-guardian}"
-if [ "\${1:-}" = "--purge" ]; then rm -rf "$PREFIX"; echo "Removed application and persistent data."; exit 0; fi
+PREFIX="${'$'}{PREFIX:-$HOME/.local/opt/qq-guardian}"
+if [ "${'$'}{1:-}" = "--purge" ]; then rm -rf "$PREFIX"; echo "Removed application and persistent data."; exit 0; fi
 rm -rf "$PREFIX/releases" "$PREFIX/current" "$PREFIX/.update-tmp"
 echo "Removed application versions. Persistent data/config/logs were retained at $PREFIX/data, $PREFIX/config, and $PREFIX/logs."
 `;
@@ -200,7 +202,7 @@ echo "Removed application versions. Persistent data/config/logs were retained at
 function linuxRollback() {
   return String.raw`#!/bin/sh
 set -eu
-PREFIX="\${QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
+PREFIX="${'$'}{QQ_GUARDIAN_PREFIX:-$HOME/.local/opt/qq-guardian}"
 RELEASES="$PREFIX/releases"
 [ -d "$RELEASES" ] || { echo "No versioned releases found." >&2; exit 1; }
 CURRENT="$(readlink -f "$PREFIX/current" 2>/dev/null || true)"
@@ -263,6 +265,7 @@ try{
   $new=Get-ChildItem $tmp -Directory | Select-Object -First 1
   if(-not $new){throw 'Invalid update archive'}
   $manifest=Get-Content (Join-Path $new.FullName 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
+  if($manifest.version -isnot [string] -or $manifest.version.Length -gt 128 -or $manifest.version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'){throw 'Invalid release version'}
   $version='v'+$manifest.version
   $releases=Join-Path $Prefix 'releases'
   $target=Join-Path $releases $version
@@ -290,6 +293,7 @@ $ErrorActionPreference='Stop'
 if(-not $Yes -and $env:QQ_GUARDIAN_NON_INTERACTIVE -ne '1'){throw 'Non-interactive install requires -Yes or QQ_GUARDIAN_NON_INTERACTIVE=1.'}
 $base=Split-Path -Parent $PSCommandPath
 $manifest=Get-Content (Join-Path $base 'RELEASE-MANIFEST.json') -Raw | ConvertFrom-Json
+if($manifest.version -isnot [string] -or $manifest.version.Length -gt 128 -or $manifest.version -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'){throw 'Invalid release version'}
 $version='v'+$manifest.version
 $releases=Join-Path $Prefix 'releases'
 $target=Join-Path $releases $version
@@ -339,4 +343,3 @@ if(Test-Path $releases){Remove-Item $releases -Recurse -Force}
 Write-Host "Removed QQ Guardian application versions. Preserved: $(Join-Path $Prefix 'data'), $(Join-Path $Prefix 'config'), $(Join-Path $Prefix 'logs')"
 `;
 }
-
