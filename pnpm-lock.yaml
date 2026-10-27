@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@snowluma/sdk':
-        specifier: 1.14.22
-        version: 1.14.22
+        specifier: 2.1.1
+        version: 2.1.1
       ws:
         specifier: ^8.21.3
         version: 8.22.0
@@ -194,9 +194,9 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@snowluma/sdk@1.14.22':
-    resolution: {integrity: sha512-T3yZj0lQqLReCVLXWSTcnM1visbkuWhjd97AlDYPxGMX0DLhbFoIJVfSsIjRVqdezATCCnPjnX3c2Gtq/BZi/Q==}
-    engines: {node: '>=22'}
+  '@snowluma/sdk@2.1.1':
+    resolution: {integrity: sha512-LurQVR2UYxTJXNK7rjMbgpzzmZa0hBfgTx1UGM+3b0h44z8iwgvl1T3p/98AwOv9kaz0O/5e0sfThQCUwV9KnQ==}
+    engines: {node: ^24.22.1 || >=26.12.1}
 
   '@types/node@26.6.5':
     resolution: {integrity: sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==}
@@ -443,7 +443,7 @@ snapshots:
     dependencies:
       playwright: 1.64.1
 
-  '@snowluma/sdk@1.14.22': {}
+  '@snowluma/sdk@2.1.1': {}
 
   '@types/node@26.6.5':
     dependencies:
